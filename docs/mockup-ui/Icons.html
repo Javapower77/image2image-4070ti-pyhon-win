@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venice Studio UI Components - Extracted</title>
+<style>
+/* ===== Minimal theme variables needed (light theme matching the screenshots) ===== */
+:root, [data-theme="light"] {
+  --background-surface-chrome: #f7f5ed;
+  --background-input-base: #ffffff;
+  --border-input: rgba(0, 0, 0, 0.08);
+  --shadow-field: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --chakra-radii-xl: 16px;
+  --chakra-radii-lg: 12px;
+  --chakra-space-1: 4px;
+  --chakra-space-2: 8px;
+  --chakra-sizes-4: 16px;
+  --focus-ring-soft: rgba(24, 123, 216, 0.3);
+  --foreground: #1b1913;
+  --muted-bg: rgba(0, 0, 0, 0.04);
+  --generate-bg: #1b1913;
+  --generate-fg: #f7f5ed;
+}
+
+/* Dark theme alternative */
+[data-theme="dark"] {
+  --background-surface-chrome: #13181d;
+  --background-input-base: #181e24;
+  --border-input: rgba(255, 255, 255, 0.08);
+  --shadow-field: 0 1px 2px 0 rgba(0,0,0,0.3);
+  --foreground: #eeede4;
+  --muted-bg: rgba(255, 255, 255, 0.04);
+  --generate-bg: #eeede4;
+  --generate-fg: #0e1217;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--background-surface-chrome);
+  color: var(--foreground);
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+/* ===== TOP TOOLBAR (mode switcher) ===== */
+.venice-toolbar {
+  background: var(--background-input-base);
+  border-radius: var(--chakra-radii-lg);
+  border: 1px solid var(--border-input);
+  box-shadow: var(--shadow-field);
+  padding: var(--chakra-space-1);
+  display: inline-flex;
+}
+
+.venice-toolbar-stack {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: var(--chakra-space-2);
+}
+
+.venice-icon-btn {
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  vertical-align: middle;
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  line-height: 1.2;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s;
+  height: 40px;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.venice-icon-btn:hover {
+  background: var(--muted-bg);
+}
+
+.venice-icon-btn[data-active],
+.venice-icon-btn.active {
+  background: var(--muted-bg);
+}
+
+.venice-icon-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+
+.venice-icon {
+  width: 1.5em;
+  height: 1.5em;
+  display: inline-block;
+  line-height: 1em;
+  flex-shrink: 0;
+  color: currentColor;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ===== MODEL SELECTOR (circle + chevron) ===== */
+.venice-model-btn {
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  vertical-align: middle;
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  border-radius: 9999px;
+  font-weight: 500;
+  transition: all 0.2s;
+  height: 32px;
+  min-width: 62px;
+  padding: 0 8px;
+  background: var(--muted-bg);
+  color: var(--foreground);
+  border: 1px solid var(--border-input);
+  cursor: pointer;
+  gap: 4px;
+}
+
+.venice-model-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+.venice-model-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+
+.venice-model-btn .chevron {
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== GENERATE BUTTON (dark circle with arrow) ===== */
+.venice-generate-btn {
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  vertical-align: middle;
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.2s;
+  height: 32px;
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  background: var(--generate-bg);
+  color: var(--generate-fg);
+  border: none;
+  cursor: pointer;
+}
+
+.venice-generate-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.venice-generate-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.venice-generate-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+
+/* ===== PROMPT BAR ICON BUTTONS (smaller) ===== */
+.venice-prompt-icon-btn {
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  vertical-align: middle;
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--foreground);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  gap: 4px;
+}
+
+.venice-prompt-icon-btn:hover {
+  background: var(--muted-bg);
+}
+
+.venice-prompt-icon-btn .venice-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Demo section labels */
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="section-label">1. Top Mode Switcher Toolbar</div>
+  <div class="venice-toolbar">
+    <div class="venice-toolbar-stack">
+      <!-- Edit Source -->
+      <a class="venice-icon-btn" aria-label="Image" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 21l15 -15l-3 -3l-15 15l3 3"></path>
+          <path d="M15 6l3 3"></path>
+          <path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"></path>
+          <path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"></path>
+        </svg>
+      </a>
+
+      <!-- Combine Images -->
+      <a class="venice-icon-btn"  aria-label="Library" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 8h.01"></path><path d="M12.5 21h-6.5a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v6.5"></path><path d="M3 16l5 -5c.928 -.893 2.072 -.893 3 0l3.5 3.5"></path><path d="M14 14l1 -1c.679 -.653 1.473 -.829 2.214 -.526"></path><path d="M19 22v-6"></path><path d="M22 19l-3 -3l-3 3"></path>
+        </svg>
+      </a>
+
+
+      <!-- Create from Text -->
+      <a class="venice-icon-btn" aria-label="Edit" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"></path><path d="M13.5 6.5l4 4"></path>
+        </svg>
+      </a>
+
+
+      <!-- Krea Reference Edit -->
+      <a class="venice-icon-btn" aria-label="Audio" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.34057 1.26646C10.1061 1.14218 11.6638 2.37142 11.8911 4.06824C12.1069 5.68015 11.0037 7.23915 9.34608 7.60419C8.93062 7.69566 8.46886 7.67023 8.02919 7.72601C6.95925 7.86191 6.04308 8.30843 5.2807 9.06558L5.27279 9.06966L5.26385 9.0689L5.2568 9.06354L5.25394 9.05533C5.25366 9.04931 5.25521 9.04398 5.25861 9.03933C5.26343 9.03249 5.26583 9.02497 5.26583 9.01677C5.25535 7.76661 5.2521 6.253 5.25606 4.47593C5.25946 2.79675 6.58613 1.38951 8.34057 1.26646Z"></path><path d="M8.5264 15.3045C6.27918 15.2869 4.66832 13.0758 5.44996 11.0041C5.88114 9.86055 6.9457 9.0267 8.20737 8.89545C8.59097 8.85566 9.05188 8.86591 9.42189 8.79701C11.322 8.44386 12.7897 6.99068 13.0867 5.14047C13.1525 4.7299 13.1181 4.24058 13.215 3.805C13.6636 1.78908 15.9736 0.657869 17.9137 1.56924C18.9252 2.04502 19.6032 2.94326 19.771 4.01623C19.8055 4.23634 19.8167 4.50896 19.8045 4.83408C19.5845 10.6755 14.5956 15.3529 8.5264 15.3045Z"></path><path d="M11.3567 16.2337C11.3465 16.229 11.3396 16.2222 11.3359 16.2132C11.3352 16.2114 11.3349 16.2094 11.335 16.2075C11.3351 16.2056 11.3356 16.2037 11.3366 16.202C11.3375 16.2003 11.3388 16.1988 11.3403 16.1976C11.3419 16.1964 11.3437 16.1956 11.3457 16.1951C13.6512 15.6674 15.6487 14.6058 17.338 13.0102C17.3683 12.9815 17.3959 12.9837 17.4208 13.0168C17.6918 13.3736 17.9748 13.7571 18.2016 14.1234C19.1336 15.6279 19.6617 17.2574 19.7857 19.0121C19.8106 19.3659 19.8184 19.6392 19.8091 19.832C19.7254 21.537 18.2985 22.9126 16.4998 22.9229C14.9072 22.9315 13.5071 21.845 13.2046 20.325C13.1333 19.9653 13.1553 19.4669 13.0946 19.0867C12.9071 17.9169 12.3355 16.9702 11.3797 16.2464C11.3754 16.2428 11.3678 16.2386 11.3567 16.2337Z"></path><path d="M7.98752 22.874C6.63495 22.6386 5.5466 21.5882 5.30446 20.2814C5.27132 20.1026 5.25476 19.8301 5.25476 19.464C5.25447 18.0227 5.25419 16.5813 5.25391 15.1397C5.25391 15.1255 5.25929 15.1232 5.27005 15.1327C6.15449 15.919 7.08397 16.3993 8.29806 16.4793C8.29919 16.4795 8.40794 16.4831 8.62431 16.4899C10.205 16.5404 11.544 17.5764 11.8528 19.0813C12.3099 21.3064 10.2955 23.2756 7.98752 22.874Z"></path>
+        </svg>
+      </a>
+
+      <!-- Swap Faces/Body -->
+      <a class="venice-icon-btn" data-active  aria-label="Edit" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.192 9h6.616a2 2 0 0 1 1.992 2.183l-.567 6.182a4 4 0 0 1 -3.983 3.635h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183z"></path><path d="M15 13h.01"></path><path d="M18 13h.01"></path><path d="M15 16.5c1 .667 2 .667 3 0"></path><path d="M8.632 15.982a4.037 4.037 0 0 1 -.382 .018h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183h6.616a2 2 0 0 1 2 2"></path><path d="M6 8h.01"></path><path d="M9 8h.01"></path><path d="M6 12c.764 -.51 1.528 -.63 2.291 -.36"></path>
+        </svg>
+      </a>
+
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="section-label">2. Prompt buttoms</div>
+  <div class="venice-toolbar">
+    <div class="venice-toolbar-stack">    
+
+
+      <!-- Settings -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M4 6l8 0"></path><path d="M16 6l4 0"></path><path d="M8 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M4 12l2 0"></path><path d="M10 12l10 0"></path><path d="M17 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M4 18l11 0"></path><path d="M19 18l1 0"></path>
+        </svg>
+      </a>
+
+      <!-- Output -->
+      <a class="venice-icon-btn" aria-label="Library" href="#" data-active >
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M7 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z"></path><path d="M17 17v2a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2h2"></path><path d="M14 14v-8l-2 2"></path>
+        </svg>
+      </a>
+
+      <!-- Aspect ratio / resize -->
+      <a class="venice-icon-btn" aria-label="Library" href="#" >
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 3h-4a2 2 0 0 0 -2 2v12a4 4 0 0 0 8 0v-12a2 2 0 0 0 -2 -2"></path><path d="M13 7.35l-2 -2a2 2 0 0 0 -2.828 0l-2.828 2.828a2 2 0 0 0 0 2.828l9 9"></path><path d="M7.3 13h-2.3a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h12"></path><path d="M17 17l0 .01"></path>
+        </svg>
+      </a>
+
+      <!-- Replace Body/Head -->
+      <a class="venice-icon-btn" aria-label="Library" href="#" >
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path>
+        </svg>
+      </a>
+
+      <!-- BFS adapter weight -->
+      <a class="venice-icon-btn" aria-label="Library" href="#"  >
+        <svg class="venice-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+	   <path d="M8 7l4 -4l4 4"></path><path d="M12 3v5.394a6.737 6.737 0 0 1 -3 5.606a6.737 6.737 0 0 0 -3 5.606v1.394"></path><path d="M12 3v5.394a6.737 6.737 0 0 0 3 5.606a6.737 6.737 0 0 1 3 5.606v1.394"></path>
+        </svg>
+      </a>
+
+<div>
+  <button class="venice-model-btn" aria-label="Select Model">
+    <!-- Krea 2 Model -->
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8.34057 1.26646C10.1061 1.14218 11.6638 2.37142 11.8911 4.06824C12.1069 5.68015 11.0037 7.23915 9.34608 7.60419C8.93062 7.69566 8.46886 7.67023 8.02919 7.72601C6.95925 7.86191 6.04308 8.30843 5.2807 9.06558L5.27279 9.06966L5.26385 9.0689L5.2568 9.06354L5.25394 9.05533C5.25366 9.04931 5.25521 9.04398 5.25861 9.03933C5.26343 9.03249 5.26583 9.02497 5.26583 9.01677C5.25535 7.76661 5.2521 6.253 5.25606 4.47593C5.25946 2.79675 6.58613 1.38951 8.34057 1.26646Z"></path><path d="M8.5264 15.3045C6.27918 15.2869 4.66832 13.0758 5.44996 11.0041C5.88114 9.86055 6.9457 9.0267 8.20737 8.89545C8.59097 8.85566 9.05188 8.86591 9.42189 8.79701C11.322 8.44386 12.7897 6.99068 13.0867 5.14047C13.1525 4.7299 13.1181 4.24058 13.215 3.805C13.6636 1.78908 15.9736 0.657869 17.9137 1.56924C18.9252 2.04502 19.6032 2.94326 19.771 4.01623C19.8055 4.23634 19.8167 4.50896 19.8045 4.83408C19.5845 10.6755 14.5956 15.3529 8.5264 15.3045Z"></path><path d="M11.3567 16.2337C11.3465 16.229 11.3396 16.2222 11.3359 16.2132C11.3352 16.2114 11.3349 16.2094 11.335 16.2075C11.3351 16.2056 11.3356 16.2037 11.3366 16.202C11.3375 16.2003 11.3388 16.1988 11.3403 16.1976C11.3419 16.1964 11.3437 16.1956 11.3457 16.1951C13.6512 15.6674 15.6487 14.6058 17.338 13.0102C17.3683 12.9815 17.3959 12.9837 17.4208 13.0168C17.6918 13.3736 17.9748 13.7571 18.2016 14.1234C19.1336 15.6279 19.6617 17.2574 19.7857 19.0121C19.8106 19.3659 19.8184 19.6392 19.8091 19.832C19.7254 21.537 18.2985 22.9126 16.4998 22.9229C14.9072 22.9315 13.5071 21.845 13.2046 20.325C13.1333 19.9653 13.1553 19.4669 13.0946 19.0867C12.9071 17.9169 12.3355 16.9702 11.3797 16.2464C11.3754 16.2428 11.3678 16.2386 11.3567 16.2337Z"></path><path d="M7.98752 22.874C6.63495 22.6386 5.5466 21.5882 5.30446 20.2814C5.27132 20.1026 5.25476 19.8301 5.25476 19.464C5.25447 18.0227 5.25419 16.5813 5.25391 15.1397C5.25391 15.1255 5.25929 15.1232 5.27005 15.1327C6.15449 15.919 7.08397 16.3993 8.29806 16.4793C8.29919 16.4795 8.40794 16.4831 8.62431 16.4899C10.205 16.5404 11.544 17.5764 11.8528 19.0813C12.3099 21.3064 10.2955 23.2756 7.98752 22.874Z"></path>
+    </svg>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+<div style="padding-left:300px">
+  <button class="venice-generate-btn" aria-label="Generate">
+    <svg class="venice-icon" viewBox="0 0 24 24" style="width:16px;height:16px;">
+      <path d="M12 5l0 14"></path>
+      <path d="M18 11l-6 -6"></path>
+      <path d="M6 11l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+    </div>
+  </div>
+</div>
+
+
+<div>
+  <div class="section-label">3. Models Selector
+</div>
+  <div class="venice-toolbar">
+    <div class="venice-toolbar-stack">    
+
+
+<div>
+  <button class="venice-model-btn" aria-label="Select Model">
+    <!-- Krea 2 Model -->
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8.34057 1.26646C10.1061 1.14218 11.6638 2.37142 11.8911 4.06824C12.1069 5.68015 11.0037 7.23915 9.34608 7.60419C8.93062 7.69566 8.46886 7.67023 8.02919 7.72601C6.95925 7.86191 6.04308 8.30843 5.2807 9.06558L5.27279 9.06966L5.26385 9.0689L5.2568 9.06354L5.25394 9.05533C5.25366 9.04931 5.25521 9.04398 5.25861 9.03933C5.26343 9.03249 5.26583 9.02497 5.26583 9.01677C5.25535 7.76661 5.2521 6.253 5.25606 4.47593C5.25946 2.79675 6.58613 1.38951 8.34057 1.26646Z"></path><path d="M8.5264 15.3045C6.27918 15.2869 4.66832 13.0758 5.44996 11.0041C5.88114 9.86055 6.9457 9.0267 8.20737 8.89545C8.59097 8.85566 9.05188 8.86591 9.42189 8.79701C11.322 8.44386 12.7897 6.99068 13.0867 5.14047C13.1525 4.7299 13.1181 4.24058 13.215 3.805C13.6636 1.78908 15.9736 0.657869 17.9137 1.56924C18.9252 2.04502 19.6032 2.94326 19.771 4.01623C19.8055 4.23634 19.8167 4.50896 19.8045 4.83408C19.5845 10.6755 14.5956 15.3529 8.5264 15.3045Z"></path><path d="M11.3567 16.2337C11.3465 16.229 11.3396 16.2222 11.3359 16.2132C11.3352 16.2114 11.3349 16.2094 11.335 16.2075C11.3351 16.2056 11.3356 16.2037 11.3366 16.202C11.3375 16.2003 11.3388 16.1988 11.3403 16.1976C11.3419 16.1964 11.3437 16.1956 11.3457 16.1951C13.6512 15.6674 15.6487 14.6058 17.338 13.0102C17.3683 12.9815 17.3959 12.9837 17.4208 13.0168C17.6918 13.3736 17.9748 13.7571 18.2016 14.1234C19.1336 15.6279 19.6617 17.2574 19.7857 19.0121C19.8106 19.3659 19.8184 19.6392 19.8091 19.832C19.7254 21.537 18.2985 22.9126 16.4998 22.9229C14.9072 22.9315 13.5071 21.845 13.2046 20.325C13.1333 19.9653 13.1553 19.4669 13.0946 19.0867C12.9071 17.9169 12.3355 16.9702 11.3797 16.2464C11.3754 16.2428 11.3678 16.2386 11.3567 16.2337Z"></path><path d="M7.98752 22.874C6.63495 22.6386 5.5466 21.5882 5.30446 20.2814C5.27132 20.1026 5.25476 19.8301 5.25476 19.464C5.25447 18.0227 5.25419 16.5813 5.25391 15.1397C5.25391 15.1255 5.25929 15.1232 5.27005 15.1327C6.15449 15.919 7.08397 16.3993 8.29806 16.4793C8.29919 16.4795 8.40794 16.4831 8.62431 16.4899C10.205 16.5404 11.544 17.5764 11.8528 19.0813C12.3099 21.3064 10.2955 23.2756 7.98752 22.874Z"></path>
+    </svg>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+<div>
+  <button class="venice-model-btn" aria-label="Select Model">
+    <!-- Flux 2 -->
+    <svg width="16" height="16" viewBox="0 0 196 140" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M139.757 59.8389h-20.846L98.0654 30.4717 33.0381 121.982h20.8896l44.1368-62.1412H118.91L74.7734 121.982h20.9483l44.0353-62.1431L196 139.025h-15.732v.001h-17.175v-16.977l-23.336-32.8429-23.206 32.7799v17.039H62.668l-.001.002H41.8213l.001-.002H0L98.0654.973633 139.757 59.8389Z"></path>
+    </svg>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+<div>
+  <button class="venice-model-btn" aria-label="Select Model">
+    <!-- Qween -->
+    <svg width="16" height="16" viewBox="0 0 128 128" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M66.9118 12.639C68.8053 15.9635 70.6892 19.2976 72.5683 22.6366C72.6442 22.7701 72.7543 22.8811 72.8872 22.9581C73.0201 23.0352 73.1711 23.0755 73.3247 23.075H100.075C100.913 23.075 101.626 23.605 102.224 24.6506L109.229 37.0332C110.145 38.6569 110.386 39.3363 109.345 41.066C108.092 43.1378 106.873 45.2288 105.683 47.3295L103.915 50.4999C103.404 51.4442 102.841 51.849 103.722 52.9668L116.5 75.3085C117.329 76.7587 117.035 77.6886 116.293 79.0184C114.187 82.8007 112.043 86.554 109.861 90.2929C109.094 91.6034 108.165 92.0997 106.584 92.0756C102.841 91.9985 99.1065 92.0274 95.3725 92.1527C95.2924 92.1568 95.2147 92.181 95.1465 92.2231C95.0783 92.2653 95.0218 92.3239 94.9822 92.3936C90.674 100.027 86.3296 107.64 81.9492 115.232C81.1349 116.643 80.1183 116.981 78.456 116.985C73.6524 117 68.8102 117.005 63.9198 116.995C63.4645 116.994 63.0176 116.872 62.6242 116.643C62.2308 116.414 61.9049 116.085 61.6793 115.689L55.2471 104.497C55.2097 104.424 55.1523 104.362 55.0815 104.321C55.0107 104.279 54.9294 104.258 54.8473 104.261H30.1881C28.8149 104.405 27.5237 104.256 26.3095 103.817L18.5861 90.4711C18.3577 90.076 18.2366 89.6279 18.2349 89.1715C18.2332 88.7151 18.351 88.2662 18.5764 87.8693L24.3919 77.6549C24.4747 77.5104 24.5183 77.3468 24.5183 77.1803C24.5183 77.0138 24.4747 76.8502 24.3919 76.7057C21.3626 71.4611 18.3513 66.2061 15.3579 60.9408L11.5516 54.2195C10.7807 52.7259 10.7181 51.8297 12.0093 49.57C14.2498 45.6528 16.4757 41.7405 18.6921 37.833C19.3281 36.7056 20.1568 36.2237 21.5059 36.2189C25.6639 36.2014 29.8219 36.1998 33.98 36.2141C34.085 36.2133 34.188 36.1848 34.2785 36.1315C34.369 36.0782 34.4438 36.002 34.4955 35.9106L48.0152 12.3258C48.22 11.967 48.5159 11.6685 48.8728 11.4604C49.2298 11.2524 49.6352 11.142 50.0484 11.1405C52.5731 11.1357 55.1219 11.1405 57.6755 11.1116L62.5755 11.0008C64.2185 10.9863 66.0638 11.155 66.9118 12.639ZM50.376 14.5807C50.3253 14.5806 50.2754 14.594 50.2314 14.6194C50.1874 14.6447 50.1509 14.6812 50.1255 14.7252L36.3168 38.8882C36.2505 39.002 36.1556 39.0966 36.0415 39.1625C35.9274 39.2284 35.7981 39.2634 35.6663 39.264H21.8576C21.5878 39.264 21.5203 39.3844 21.66 39.6205L49.6533 88.5535C49.7738 88.7559 49.7159 88.8522 49.4895 88.8571L36.0228 88.9293C35.826 88.9228 35.6312 88.9717 35.4608 89.0705C35.2904 89.1693 35.1513 89.3141 35.0592 89.4882L28.6993 100.618C28.4873 100.994 28.5981 101.187 29.0269 101.187L56.5673 101.225C56.7889 101.225 56.9528 101.322 57.0684 101.519L63.8282 113.343C64.0499 113.733 64.2715 113.738 64.4979 113.343L88.6175 71.136L92.39 64.4773C92.413 64.4362 92.4466 64.4019 92.4873 64.3781C92.5279 64.3542 92.5742 64.3417 92.6213 64.3417C92.6684 64.3417 92.7147 64.3542 92.7554 64.3781C92.796 64.4019 92.8296 64.4362 92.8526 64.4773L99.7136 76.6672C99.7651 76.7584 99.8401 76.8342 99.9307 76.8867C100.021 76.9392 100.124 76.9666 100.229 76.9659L113.542 76.8695C113.576 76.8698 113.609 76.8611 113.639 76.8442C113.669 76.8272 113.693 76.8027 113.71 76.7732C113.727 76.7437 113.735 76.7105 113.735 76.6768C113.735 76.6431 113.727 76.6099 113.71 76.5804L99.7377 52.0754C99.6874 51.9935 99.6608 51.8993 99.6608 51.8032C99.6608 51.7071 99.6874 51.6129 99.7377 51.531L101.149 49.0882L106.546 39.5627C106.661 39.3652 106.603 39.264 106.377 39.264H50.5109C50.2267 39.264 50.1592 39.1387 50.3038 38.893L57.2129 26.8236C57.2647 26.7413 57.2922 26.6461 57.2922 26.5489C57.2922 26.4517 57.2647 26.3565 57.2129 26.2743L50.6314 14.73C50.6062 14.6844 50.5692 14.6465 50.5243 14.6202C50.4793 14.5939 50.4281 14.5803 50.376 14.5807ZM80.682 53.2221C80.9036 53.2221 80.9615 53.3185 80.8458 53.5112L76.8371 60.5698L64.2474 82.6609C64.2237 82.7039 64.1888 82.7397 64.1464 82.7643C64.1039 82.7889 64.0556 82.8015 64.0065 82.8007C63.9576 82.8005 63.9097 82.7875 63.8674 82.7629C63.8251 82.7384 63.79 82.7033 63.7656 82.6609L47.1286 53.5979C47.0323 53.4341 47.0804 53.3474 47.2635 53.3378L48.3042 53.2799L80.6916 53.2221H80.682Z" fill="currentColor"></path>
+    </svg>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+<div>
+  <button class="venice-model-btn" aria-label="Select Model">
+    <!-- FireRed Edit -->
+    <svg width="16" height="16" viewBox="0 0 25 26" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M20.778 9.214c0 5.085-4.618 9.212-10.315 9.212v7.175H0l3.663-12.8h3.503a22.5 22.5 0 01-.282-3.589C6.884 4.125 8.485 0 10.461 0c5.699 0 10.319 4.125 10.319 9.212zM8.589 9.212c0 4.155.838 7.525 1.872 7.525s1.872-3.37 1.872-7.525c0-4.155-.838-7.525-1.872-7.525s-1.872 3.37-1.872 7.525z"></path><path d="M20.982 18.425H10.474l4.03 7.178h10.507z"></path></path>
+    </svg>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6l6 -6"></path>
+    </svg>
+  </button>
+</div>
+
+
+
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="section-label">4. Models</div>
+  <div class="venice-toolbar">
+    <div class="venice-toolbar-stack">    
+
+
+      <!-- FLUX -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+
+<svg width="16" height="16" viewBox="0 0 196 140" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M139.757 59.8389h-20.846L98.0654 30.4717 33.0381 121.982h20.8896l44.1368-62.1412H118.91L74.7734 121.982h20.9483l44.0353-62.1431L196 139.025h-15.732v.001h-17.175v-16.977l-23.336-32.8429-23.206 32.7799v17.039H62.668l-.001.002H41.8213l.001-.002H0L98.0654.973633 139.757 59.8389Z"></path>
+ </svg>
+      </a>
+
+      <!-- qwen -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+       <svg width="16" height="16" viewBox="0 0 128 128" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M66.9118 12.639C68.8053 15.9635 70.6892 19.2976 72.5683 22.6366C72.6442 22.7701 72.7543 22.8811 72.8872 22.9581C73.0201 23.0352 73.1711 23.0755 73.3247 23.075H100.075C100.913 23.075 101.626 23.605 102.224 24.6506L109.229 37.0332C110.145 38.6569 110.386 39.3363 109.345 41.066C108.092 43.1378 106.873 45.2288 105.683 47.3295L103.915 50.4999C103.404 51.4442 102.841 51.849 103.722 52.9668L116.5 75.3085C117.329 76.7587 117.035 77.6886 116.293 79.0184C114.187 82.8007 112.043 86.554 109.861 90.2929C109.094 91.6034 108.165 92.0997 106.584 92.0756C102.841 91.9985 99.1065 92.0274 95.3725 92.1527C95.2924 92.1568 95.2147 92.181 95.1465 92.2231C95.0783 92.2653 95.0218 92.3239 94.9822 92.3936C90.674 100.027 86.3296 107.64 81.9492 115.232C81.1349 116.643 80.1183 116.981 78.456 116.985C73.6524 117 68.8102 117.005 63.9198 116.995C63.4645 116.994 63.0176 116.872 62.6242 116.643C62.2308 116.414 61.9049 116.085 61.6793 115.689L55.2471 104.497C55.2097 104.424 55.1523 104.362 55.0815 104.321C55.0107 104.279 54.9294 104.258 54.8473 104.261H30.1881C28.8149 104.405 27.5237 104.256 26.3095 103.817L18.5861 90.4711C18.3577 90.076 18.2366 89.6279 18.2349 89.1715C18.2332 88.7151 18.351 88.2662 18.5764 87.8693L24.3919 77.6549C24.4747 77.5104 24.5183 77.3468 24.5183 77.1803C24.5183 77.0138 24.4747 76.8502 24.3919 76.7057C21.3626 71.4611 18.3513 66.2061 15.3579 60.9408L11.5516 54.2195C10.7807 52.7259 10.7181 51.8297 12.0093 49.57C14.2498 45.6528 16.4757 41.7405 18.6921 37.833C19.3281 36.7056 20.1568 36.2237 21.5059 36.2189C25.6639 36.2014 29.8219 36.1998 33.98 36.2141C34.085 36.2133 34.188 36.1848 34.2785 36.1315C34.369 36.0782 34.4438 36.002 34.4955 35.9106L48.0152 12.3258C48.22 11.967 48.5159 11.6685 48.8728 11.4604C49.2298 11.2524 49.6352 11.142 50.0484 11.1405C52.5731 11.1357 55.1219 11.1405 57.6755 11.1116L62.5755 11.0008C64.2185 10.9863 66.0638 11.155 66.9118 12.639ZM50.376 14.5807C50.3253 14.5806 50.2754 14.594 50.2314 14.6194C50.1874 14.6447 50.1509 14.6812 50.1255 14.7252L36.3168 38.8882C36.2505 39.002 36.1556 39.0966 36.0415 39.1625C35.9274 39.2284 35.7981 39.2634 35.6663 39.264H21.8576C21.5878 39.264 21.5203 39.3844 21.66 39.6205L49.6533 88.5535C49.7738 88.7559 49.7159 88.8522 49.4895 88.8571L36.0228 88.9293C35.826 88.9228 35.6312 88.9717 35.4608 89.0705C35.2904 89.1693 35.1513 89.3141 35.0592 89.4882L28.6993 100.618C28.4873 100.994 28.5981 101.187 29.0269 101.187L56.5673 101.225C56.7889 101.225 56.9528 101.322 57.0684 101.519L63.8282 113.343C64.0499 113.733 64.2715 113.738 64.4979 113.343L88.6175 71.136L92.39 64.4773C92.413 64.4362 92.4466 64.4019 92.4873 64.3781C92.5279 64.3542 92.5742 64.3417 92.6213 64.3417C92.6684 64.3417 92.7147 64.3542 92.7554 64.3781C92.796 64.4019 92.8296 64.4362 92.8526 64.4773L99.7136 76.6672C99.7651 76.7584 99.8401 76.8342 99.9307 76.8867C100.021 76.9392 100.124 76.9666 100.229 76.9659L113.542 76.8695C113.576 76.8698 113.609 76.8611 113.639 76.8442C113.669 76.8272 113.693 76.8027 113.71 76.7732C113.727 76.7437 113.735 76.7105 113.735 76.6768C113.735 76.6431 113.727 76.6099 113.71 76.5804L99.7377 52.0754C99.6874 51.9935 99.6608 51.8993 99.6608 51.8032C99.6608 51.7071 99.6874 51.6129 99.7377 51.531L101.149 49.0882L106.546 39.5627C106.661 39.3652 106.603 39.264 106.377 39.264H50.5109C50.2267 39.264 50.1592 39.1387 50.3038 38.893L57.2129 26.8236C57.2647 26.7413 57.2922 26.6461 57.2922 26.5489C57.2922 26.4517 57.2647 26.3565 57.2129 26.2743L50.6314 14.73C50.6062 14.6844 50.5692 14.6465 50.5243 14.6202C50.4793 14.5939 50.4281 14.5803 50.376 14.5807ZM80.682 53.2221C80.9036 53.2221 80.9615 53.3185 80.8458 53.5112L76.8371 60.5698L64.2474 82.6609C64.2237 82.7039 64.1888 82.7397 64.1464 82.7643C64.1039 82.7889 64.0556 82.8015 64.0065 82.8007C63.9576 82.8005 63.9097 82.7875 63.8674 82.7629C63.8251 82.7384 63.79 82.7033 63.7656 82.6609L47.1286 53.5979C47.0323 53.4341 47.0804 53.3474 47.2635 53.3378L48.3042 53.2799L80.6916 53.2221H80.682Z" fill="currentColor">        </svg>
+      </a>
+
+      <!-- firered -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+    <svg width="16" height="16" viewBox="0 0 25 26" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M20.778 9.214c0 5.085-4.618 9.212-10.315 9.212v7.175H0l3.663-12.8h3.503a22.5 22.5 0 01-.282-3.589C6.884 4.125 8.485 0 10.461 0c5.699 0 10.319 4.125 10.319 9.212zM8.589 9.212c0 4.155.838 7.525 1.872 7.525s1.872-3.37 1.872-7.525c0-4.155-.838-7.525-1.872-7.525s-1.872 3.37-1.872 7.525z"></path><path d="M20.982 18.425H10.474l4.03 7.178h10.507z"></path></path>
+    </svg>
+      </a>
+
+
+
+<a class="venice-icon-btn" aria-label="Library" href="#">
+    <!-- Krea 2 Model -->
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8.34057 1.26646C10.1061 1.14218 11.6638 2.37142 11.8911 4.06824C12.1069 5.68015 11.0037 7.23915 9.34608 7.60419C8.93062 7.69566 8.46886 7.67023 8.02919 7.72601C6.95925 7.86191 6.04308 8.30843 5.2807 9.06558L5.27279 9.06966L5.26385 9.0689L5.2568 9.06354L5.25394 9.05533C5.25366 9.04931 5.25521 9.04398 5.25861 9.03933C5.26343 9.03249 5.26583 9.02497 5.26583 9.01677C5.25535 7.76661 5.2521 6.253 5.25606 4.47593C5.25946 2.79675 6.58613 1.38951 8.34057 1.26646Z"></path><path d="M8.5264 15.3045C6.27918 15.2869 4.66832 13.0758 5.44996 11.0041C5.88114 9.86055 6.9457 9.0267 8.20737 8.89545C8.59097 8.85566 9.05188 8.86591 9.42189 8.79701C11.322 8.44386 12.7897 6.99068 13.0867 5.14047C13.1525 4.7299 13.1181 4.24058 13.215 3.805C13.6636 1.78908 15.9736 0.657869 17.9137 1.56924C18.9252 2.04502 19.6032 2.94326 19.771 4.01623C19.8055 4.23634 19.8167 4.50896 19.8045 4.83408C19.5845 10.6755 14.5956 15.3529 8.5264 15.3045Z"></path><path d="M11.3567 16.2337C11.3465 16.229 11.3396 16.2222 11.3359 16.2132C11.3352 16.2114 11.3349 16.2094 11.335 16.2075C11.3351 16.2056 11.3356 16.2037 11.3366 16.202C11.3375 16.2003 11.3388 16.1988 11.3403 16.1976C11.3419 16.1964 11.3437 16.1956 11.3457 16.1951C13.6512 15.6674 15.6487 14.6058 17.338 13.0102C17.3683 12.9815 17.3959 12.9837 17.4208 13.0168C17.6918 13.3736 17.9748 13.7571 18.2016 14.1234C19.1336 15.6279 19.6617 17.2574 19.7857 19.0121C19.8106 19.3659 19.8184 19.6392 19.8091 19.832C19.7254 21.537 18.2985 22.9126 16.4998 22.9229C14.9072 22.9315 13.5071 21.845 13.2046 20.325C13.1333 19.9653 13.1553 19.4669 13.0946 19.0867C12.9071 17.9169 12.3355 16.9702 11.3797 16.2464C11.3754 16.2428 11.3678 16.2386 11.3567 16.2337Z"></path><path d="M7.98752 22.874C6.63495 22.6386 5.5466 21.5882 5.30446 20.2814C5.27132 20.1026 5.25476 19.8301 5.25476 19.464C5.25447 18.0227 5.25419 16.5813 5.25391 15.1397C5.25391 15.1255 5.25929 15.1232 5.27005 15.1327C6.15449 15.919 7.08397 16.3993 8.29806 16.4793C8.29919 16.4795 8.40794 16.4831 8.62431 16.4899C10.205 16.5404 11.544 17.5764 11.8528 19.0813C12.3099 21.3064 10.2955 23.2756 7.98752 22.874Z"></path>
+    </svg>
+</a>
+
+
+    </div>
+  </div>
+</div>
+
+
+<div>
+  <div class="section-label">5. Other Icons</div>
+  <div class="venice-toolbar">
+    <div class="venice-toolbar-stack">    
+
+
+      <!-- RUN METADATA -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path><path d="M11.3334 5.33333L8.00008 2L4.66675 5.33333" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 2V10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </a>
+
+      <!-- ADVANCED LORAS -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+<svg width="24" height="24" viewBox="0 0 21 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5.8335L7.16667 10.0002L3 14.1668V5.8335Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path><path d="M18 5.8335L13.8333 10.0002L18 14.1668V5.8335Z" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10.5 16.6665V18.3332" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10.5 11.6665V13.3332" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10.5 6.6665V8.33317" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10.5 1.6665V3.33317" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+	</a>
+
+      <!-- FACE RESTORATION -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" data-theme="dark" focusable="false" class="chakra-icon css-2ss2pw" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path><path d="M9 10l.01 0"></path><path d="M15 10l.01 0"></path><path d="M9.5 15a3.5 3.5 0 0 0 5 0"></path></svg>
+	</a>
+
+      <!-- OTHER OPTIONS -->
+      <a class="venice-icon-btn" aria-label="Library" href="#">
+<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" focusable="false" class="chakra-icon css-b5bu3y" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"></path></svg>
+	</a>
+
+
+    </div>
+  </div>
+</div>
+
+
+</body>
+</html>

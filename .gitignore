@@ -1,0 +1,12 @@
+.venv/
+.cache/
+models/
+vendor/
+outputs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+*.log
+.DS_Store

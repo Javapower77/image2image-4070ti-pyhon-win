@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from urllib.request import urlretrieve
+
+from huggingface_hub import hf_hub_download, snapshot_download
+
+from photo_edit_studio.comfy_assets import (
+    COMFY_KREA_FILES,
+    COMFY_KREA_REPO,
+    FIRERED_ENCODER,
+    FIRERED_ENCODER_REMOTE,
+    FIRERED_ENCODER_REPO,
+    FIRERED_FILES,
+    FIRERED_REPO,
+    KREA_EDIT_FILE,
+    KREA_EDIT_REPO,
+    KREA_FIRST_LORA_FILE,
+    KREA_FIRST_LORA_REMOTE,
+    KREA_FIRST_LORA_REPO,
+    KREA_TURBO_LORA_FILE,
+    KREA_TURBO_LORA_REMOTE,
+    QWEN21_COMFY_REPO,
+    QWEN21_FILES,
+    QWEN21_TURBO_LORA,
+    QWEN21_TURBO_NODE,
+    QWEN21_VIGGLE_REPO,
+)
+from photo_edit_studio.config import settings
+from photo_edit_studio.models import MODEL_SPECS
+from photo_edit_studio.models.qwen_aio import is_safetensors_file
+from photo_edit_studio.swap import BFS_REPO, SWAP_PROFILES
+
+GFPGAN_URL = "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth"
+QWEN_AIO_REPO = "Phr00t/Qwen-Image-Edit-Rapid-AIO"
+QWEN_AIO_REMOTE_FILE = "v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"
+QWEN_AIO_LOCAL_NAME = "Qwen-Rapid-AIO.safetensors"
+RECOMMENDED_MODELS = ["qwen-2511", "qwen-2511-aio", "flux-klein-4b"]
+
+
+def _download_named_file(repo: str, remote: str, destination: Path) -> None:
+    if destination.is_file():
+        print(f"Already present: {destination}")
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {repo}/{remote} -> {destination}")
+    downloaded = Path(hf_hub_download(repo_id=repo, filename=remote, local_dir=destination.parent))
+    if downloaded != destination:
+        downloaded.replace(destination)
+
+
+def download_krea_turbo_lora() -> None:
+    """Optional official Turbo adapter; it is not required by the Turbo checkpoint."""
+    _download_named_file(
+        COMFY_KREA_REPO,
+        KREA_TURBO_LORA_REMOTE,
+        settings.lora_dir / "krea2" / KREA_TURBO_LORA_FILE,
+    )
+
+
+def download_comfy_qwen21() -> None:
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    target = settings.comfy_dir / "models"
+    for filename in QWEN21_FILES:
+        destination = target / filename
+        if destination.name == QWEN21_TURBO_LORA:
+            _download_named_file(QWEN21_VIGGLE_REPO, destination.name, destination)
+        else:
+            _download_named_file(QWEN21_COMFY_REPO, filename, destination)
+    _download_named_file(
+        QWEN21_VIGGLE_REPO,
+        f"comfyui/{QWEN21_TURBO_NODE}",
+        settings.comfy_dir / "custom_nodes" / QWEN21_TURBO_NODE,
+    )
+
+
+def download_comfy_firered() -> None:
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    target = settings.comfy_dir / "models"
+    for filename in FIRERED_FILES:
+        destination = target / filename
+        if destination.name == FIRERED_ENCODER:
+            _download_named_file(FIRERED_ENCODER_REPO, FIRERED_ENCODER_REMOTE, destination)
+        else:
+            _download_named_file(FIRERED_REPO, destination.name, destination)
+
+
+def download_comfy_krea() -> None:
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    target = settings.comfy_dir / "models"
+    for filename in COMFY_KREA_FILES:
+        path = target / filename
+        if path.is_file():
+            print(f"Already present: {path}")
+            continue
+        print(f"Downloading {COMFY_KREA_REPO}/{filename} -> {target}")
+        hf_hub_download(repo_id=COMFY_KREA_REPO, filename=filename, local_dir=target)
+    adapter = target / "loras" / KREA_EDIT_FILE
+    if not adapter.is_file():
+        adapter.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading {KREA_EDIT_REPO}/{KREA_EDIT_FILE} -> {adapter}")
+        hf_hub_download(repo_id=KREA_EDIT_REPO, filename=KREA_EDIT_FILE, local_dir=adapter.parent)
+    _download_named_file(
+        KREA_FIRST_LORA_REPO,
+        KREA_FIRST_LORA_REMOTE,
+        target / "loras" / KREA_FIRST_LORA_FILE,
+    )
+
+
+
+def _download_qwen_aio(local_dir: Path) -> None:
+    local_dir.mkdir(parents=True, exist_ok=True)
+    target = local_dir / QWEN_AIO_LOCAL_NAME
+    if is_safetensors_file(target):
+        print(f"Already present: {target}")
+        return
+    if target.exists():
+        target.unlink()
+    print(f"Downloading {QWEN_AIO_REPO}/{QWEN_AIO_REMOTE_FILE} -> {target}")
+    downloaded = Path(
+        hf_hub_download(
+            repo_id=QWEN_AIO_REPO,
+            filename=QWEN_AIO_REMOTE_FILE,
+            local_dir=local_dir,
+        )
+    )
+    if downloaded != target:
+        downloaded.replace(target)
+    nested = local_dir / "v23"
+    if nested.is_dir() and not any(nested.iterdir()):
+        nested.rmdir()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Download model snapshots into the local project.")
+    parser.add_argument(
+        "models",
+        nargs="*",
+        help=f"Model keys ({', '.join(MODEL_SPECS)}); defaults to the RTX 4070 Ti recommended set",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download every registered model, including models unsuitable for 12 GB VRAM",
+    )
+    parser.add_argument("--restorers", action="store_true", help="Download GFPGAN checkpoint")
+    parser.add_argument(
+        "--bfs-swap", action="store_true", help="Download only the supported BFS swap LoRAs"
+    )
+    parser.add_argument(
+        "--comfy-krea", action="store_true", help="Download Krea Turbo ComfyUI checkpoints and identity-edit LoRA"
+    )
+    parser.add_argument(
+        "--comfy-firered", action="store_true", help="Download only FireRed GGUF Q4_K_M, FP8 vision encoder, VAE and Lightning v1.2"
+    )
+    parser.add_argument(
+        "--comfy-qwen21", action="store_true", help="Download only Qwen Image 2.1 INT8 Comfy weights and Viggle Turbo r256 LoRA/node"
+    )
+    parser.add_argument(
+        "--turbo-lora", action="store_true", help="Download the optional official Krea 2 Turbo LoRA into the app's Krea library"
+    )
+    args = parser.parse_args()
+    if args.all and args.models:
+        parser.error("Use model names or --all, not both.")
+    unknown = [key for key in args.models if key not in MODEL_SPECS]
+    if unknown:
+        parser.error(f"Unknown model(s): {', '.join(unknown)}")
+    selected = list(MODEL_SPECS) if args.all else (args.models or ([] if args.bfs_swap or args.comfy_krea or args.comfy_firered or args.comfy_qwen21 or args.turbo_lora else RECOMMENDED_MODELS))
+    for key in selected:
+        spec = MODEL_SPECS[key]
+        if spec.loader == "firered_comfy":
+            download_comfy_firered()
+            continue
+        if spec.loader == "qwen21_comfy":
+            download_comfy_qwen21()
+            continue
+        if spec.loader == "krea2":
+            download_comfy_krea()
+            download_krea_turbo_lora()
+            continue
+        if spec.loader == "qwen_aio":
+            _download_qwen_aio(spec.local_path)
+            continue
+        print(f"Downloading {spec.repo_id} -> {spec.local_path}")
+        snapshot_download(
+            repo_id=spec.repo_id,
+            local_dir=spec.local_path,
+            local_dir_use_symlinks=False,
+        )
+    if args.bfs_swap:
+        for (model_key, _kind), profile in SWAP_PROFILES.items():
+            if model_key == "qwen-2.1-turbo":
+                # This separately released file is installed by the user; it is
+                # not part of the legacy BFS repository used below.
+                continue
+            target = settings.lora_dir / profile.family / profile.filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_file():
+                print(f"Already present: {target}")
+                continue
+            print(f"Downloading {BFS_REPO}/{profile.filename} -> {target}")
+            hf_hub_download(repo_id=BFS_REPO, filename=profile.filename, local_dir=target.parent)
+    if args.comfy_krea and "krea-2-turbo" not in selected:
+        download_comfy_krea()
+        download_krea_turbo_lora()
+    if args.comfy_firered and "firered-1.1" not in selected:
+        download_comfy_firered()
+    if args.comfy_qwen21 and "qwen-2.1-turbo" not in selected:
+        download_comfy_qwen21()
+    if args.turbo_lora and "krea-2-turbo" not in selected and not args.comfy_krea:
+        download_krea_turbo_lora()
+    if args.restorers:
+        target = settings.model_dir / "restorers" / "GFPGANv1.4.pth"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            print(f"Downloading GFPGAN -> {target}")
+            urlretrieve(GFPGAN_URL, target)
+    print("Downloads complete. Set HF_HUB_OFFLINE=1 for strictly offline launches.")
+
+
+if __name__ == "__main__":
+    main()

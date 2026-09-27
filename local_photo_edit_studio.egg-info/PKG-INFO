@@ -1,0 +1,84 @@
+Metadata-Version: 2.4
+Name: local-photo-edit-studio
+Version: 0.6.1
+Summary: Private local photo editing studio optimized for Windows and 12 GB NVIDIA GPUs
+Requires-Python: <3.12,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: accelerate<2,>=1.12
+Requires-Dist: diffusers @ git+https://github.com/huggingface/diffusers.git
+Requires-Dist: gradio<7,>=6.0
+Requires-Dist: gguf<1,>=0.17
+Requires-Dist: huggingface-hub[hf-transfer]<2,>=0.36
+Requires-Dist: numpy<3,>=2.0
+Requires-Dist: opencv-python-headless<5,>=4.10
+Requires-Dist: peft<1,>=0.17
+Requires-Dist: Pillow<13,>=11
+Requires-Dist: pydantic-settings<3,>=2.7
+Requires-Dist: safetensors<1,>=0.5
+Requires-Dist: sentencepiece<1,>=0.2
+Requires-Dist: transformers<6,>=4.57
+Provides-Extra: dev
+Requires-Dist: pytest<10,>=8; extra == "dev"
+Requires-Dist: ruff<1,>=0.9; extra == "dev"
+Provides-Extra: restore
+Requires-Dist: basicsr @ git+https://github.com/XPixelGroup/BasicSR.git ; extra == "restore"
+Requires-Dist: facexlib>=0.3.0; extra == "restore"
+Requires-Dist: gfpgan @ git+https://github.com/TencentARC/GFPGAN.git ; extra == "restore"
+Requires-Dist: realesrgan>=0.3.0; extra == "restore"
+
+# Local Photo Edit Studio
+
+A private Gradio studio for local text-to-image creation, instruction-based image editing, and image composition. This version is optimized for Windows 11, Python 3.11, an RTX 4070 Ti with 12 GB VRAM, and 64 GB system RAM. It uses aggressive CPU offload so large models can operate within a much smaller GPU-memory budget.
+
+## Low-VRAM profile
+
+- Qwen Rapid AIO and FLUX.2 Klein 4B are the recommended model choices.
+- Krea 2 Turbo is available for text-to-image generation at 8 steps with sequential CPU offload.
+- FLUX.2 Klein 4B replaces its bundled Qwen3 text encoder with `models/qwen3-4b-alb-q4_0.gguf` when loaded. The current file spelling `qwen3-4b-abl-q4_0.gguf` is also recognized.
+- Sequential CPU offload, VAE slicing/tiling, attention slicing, and lazy one-model loading are enabled.
+- Output defaults are capped at a 1024-pixel longest side and one megapixel.
+- Batch count and Gradio concurrency are fixed at one.
+- Qwen 2511 remains an advanced, slower choice. FireRed 1.1 uses the project-managed ComfyUI GGUF Q4_K_M transformer with an automatic Lightning v1.2 8-step LoRA and CPU offload.
+- Models, inputs, and outputs stay local; Gradio analytics and public sharing are disabled by default.
+
+## Windows quick start
+
+1. Install a current NVIDIA driver and confirm `nvidia-smi` works.
+2. In PowerShell, run `.\scripts\setup.ps1`.
+3. Activate the environment with `.\.venv\Scripts\Activate.ps1`.
+4. Download models with `.\scripts\download-models.ps1 -Preset recommended`.
+   - Rapid AIO only: `.\scripts\download-models.ps1 -Preset qwen-aio`
+   - Klein 4B only: `.\scripts\download-models.ps1 -Preset flux-4b`
+   - Krea 2 Turbo only: `.\scripts\download-models.ps1 -Preset krea-2`
+5. Start with `.\scripts\run.ps1`.
+6. Open `http://127.0.0.1:7860`.
+
+See `docs/WINDOWS.md` for driver, PowerShell, storage, authentication, and configuration details.
+
+Setup can also install and download in one pass with `.\scripts\setup.ps1 -Download recommended`.
+
+## Features
+
+- Edit a source image or combine up to three reference images.
+- Create new images from text with Krea 2 Turbo.
+- Identity-preservation prompt mode, seeds, CFG, true CFG, steps, strength, and masks.
+- Local, family-scoped LoRA library with up to five selected adapters.
+- Optional local GFPGAN post-processing.
+- Explicit model unload and CUDA cache release.
+- Local PNG and metadata output; prompts and source images are not persisted in metadata.
+
+## Practical limitations
+
+- The RTX 4070 Ti profile trades speed for memory. CPU offload can make generation take minutes.
+- 2K and 4K generation is intentionally disabled in the UI. Generate at 1K, then upscale in a separate tiled workflow.
+- Generic image models cannot guarantee identity. Use a clean face reference and narrowly scoped prompts.
+- The mask is a post-generation composite, not native latent inpainting.
+- LoRAs must match the selected Qwen, FLUX.2 Klein, or Krea architecture. FireRed Lightning v1.2 is applied automatically; extra FireRed LoRAs are not supported.
+- Krea 2 is gated and uses the Krea 2 Community License. Accept its Hugging Face terms before downloading and follow its required filtering or review obligations.
+- Upstream model licenses and gated repository requirements still apply.
+
+## Linux
+
+The existing `scripts/setup.sh` and `scripts/run.sh` remain available. The same low-VRAM application defaults apply unless overridden in `.env`.
+
+Additional documentation: `docs/SETUP.md`, `docs/MODELS.md`, `docs/ARCHITECTURE.md`, `docs/USAGE.md`, `docs/TROUBLESHOOTING.md`, and `docs/WINDOWS.md`.

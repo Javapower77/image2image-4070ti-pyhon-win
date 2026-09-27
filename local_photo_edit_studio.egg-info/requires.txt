@@ -1,0 +1,23 @@
+accelerate<2,>=1.12
+diffusers @ git+https://github.com/huggingface/diffusers.git
+gradio<7,>=6.0
+gguf<1,>=0.17
+huggingface-hub[hf-transfer]<2,>=0.36
+numpy<3,>=2.0
+opencv-python-headless<5,>=4.10
+peft<1,>=0.17
+Pillow<13,>=11
+pydantic-settings<3,>=2.7
+safetensors<1,>=0.5
+sentencepiece<1,>=0.2
+transformers<6,>=4.57
+
+[dev]
+pytest<10,>=8
+ruff<1,>=0.9
+
+[restore]
+basicsr @ git+https://github.com/XPixelGroup/BasicSR.git
+facexlib>=0.3.0
+gfpgan @ git+https://github.com/TencentARC/GFPGAN.git
+realesrgan>=0.3.0
