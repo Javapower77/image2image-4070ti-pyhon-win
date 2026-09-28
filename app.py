@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from photo_edit_studio.config import settings
 from photo_edit_studio.ui import CSS, build_app, build_theme
 
@@ -17,6 +19,7 @@ def main() -> None:
         show_error=True,
         css=CSS,
         theme=build_theme(),
+        head="<script>" + (Path(__file__).resolve().parent / "photo_edit_studio" / "assets" / "ui" / "studio-popovers.js").read_text(encoding="utf-8") + "</script>",
     )
 
 

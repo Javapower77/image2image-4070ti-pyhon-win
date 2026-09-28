@@ -478,7 +478,7 @@ This are the SVG elements for the models when selecting in the prompt toolbox se
 </div>
 ```
 
-- FireRed Image Edit 1.1 (GGUF Q4_K_M + Lightning) 
+- FireRed Image Edit 1.1 (GGUF Q4_K_M + Lightning)
 
 ```html
 <div>
@@ -643,6 +643,21 @@ This are the SVG elements for the icons of the toolbar that is located inside th
 <path d="M8 7l4 -4l4 4"></path><path d="M12 3v5.394a6.737 6.737 0 0 1 -3 5.606a6.737 6.737 0 0 0 -3 5.606v1.394"></path><path d="M12 3v5.394a6.737 6.737 0 0 0 3 5.606a6.737 6.737 0 0 1 3 5.606v1.394"></path>
 </svg>
 </a>
+```
+
+- Submit Icon
+
+```html
+<div style="padding-left:300px">
+  <button class="venice-generate-btn" aria-label="Generate">
+    <!-- SUBMIT -->
+    <svg class="venice-icon" viewBox="0 0 24 24" style="width:16px;height:16px;">
+      <path d="M12 5l0 14"></path>
+      <path d="M18 11l-6 -6"></path>
+      <path d="M6 11l6 -6"></path>
+    </svg>
+  </button>
+</div>
 ```
 
 ### Additional Icons

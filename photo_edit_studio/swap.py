@@ -8,6 +8,7 @@ from photo_edit_studio.types import LoraSpec
 
 BFS_REPO = "Alissonerdx/BFS-Best-Face-Swap"
 QWEN21_BFS_HEAD_FILE = "Qwen21-BFS_Head_v1.1.safetensors"
+QWEN21_BFS_BODY_FILE = "Qwen21-BFS_Body_v1.1.safetensors"
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,14 @@ SWAP_PROFILES: dict[tuple[str, str], SwapProfile] = {
         "environment and background. Replace the head from <image1> with the head "
         "from <image2>, preserving hair, eye color, and facial features from <image2>. "
         "Keep the head angle and expression from <image1>.",
+    ),
+    ("qwen-2.1-turbo", "Body"): SwapProfile(
+        QWEN21_BFS_BODY_FILE,
+        "qwen21",
+        "body_swap: start with <image1> as the base image, keeping its lighting, "
+        "environment and background. Replace the person/body from <image1> with the "
+        "person from <image2>, preserving identity, clothing, and appearance from "
+        "<image2>. Keep the pose, framing and scene from <image1>.",
     ),
     ("qwen-2511", "Head"): SwapProfile(
         "bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors",
@@ -63,7 +72,7 @@ def swap_lora(model_key: str, kind: str, weight: float = 1.0) -> LoraSpec:
     path: Path = settings.lora_dir / profile.family / profile.filename
     if not path.is_file():
         hint = (
-            f"Place the Qwen 2.1 head-swap LoRA at {path}."
+            f"Place the Qwen 2.1 {kind.lower()}-swap LoRA at {path}."
             if model_key == "qwen-2.1-turbo" else
             "Run scripts/download_models.py --bfs-swap."
         )

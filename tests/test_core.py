@@ -255,8 +255,8 @@ def test_krea_reference_mode_hides_combine_uploads_and_duplicate_model_label() -
     changes = _mode_changed(KREA_EDIT_MODE)
     assert "mode-hidden" in changes[1]["elem_classes"]
     assert "mode-hidden" not in changes[3]["elem_classes"]
-    assert "mode-hidden" in changes[11]["elem_classes"]  # standard model dropdown
-    assert "mode-hidden" not in changes[14]["elem_classes"]  # dedicated Krea label
+    assert "mode-hidden" in changes[10]["elem_classes"]  # standard model dropdown
+    assert "mode-hidden" not in changes[13]["elem_classes"]  # dedicated Krea label
     defaults = _mode_model_defaults(KREA_EDIT_MODE, "qwen-2511-aio", "qwen-2511", "Head")
     assert defaults[4]["value"] == ""
     assert "mode-hidden" in defaults[4]["elem_classes"]
@@ -267,6 +267,8 @@ def test_switching_back_to_combine_restores_uploads_and_model_info() -> None:
     changes = _mode_changed(COMBINE_MODE)
     assert "mode-hidden" not in changes[1]["elem_classes"]
     assert "mode-hidden" in changes[3]["elem_classes"]
+    assert changes[10]["elem_classes"] == ["mode-hidden"]
+    assert changes[11]["elem_classes"] == ["mode-hidden"]
     defaults = _mode_model_defaults(COMBINE_MODE, "qwen-2511-aio", "qwen-2511", "Head")
     assert "mode-hidden" not in defaults[4]["elem_classes"]
     assert "Qwen Rapid AIO" in defaults[4]["value"]

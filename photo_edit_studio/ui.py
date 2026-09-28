@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import queue
+import re
+import threading
+import time
+from datetime import UTC, datetime
 from typing import Any
 
 import gradio as gr
 from PIL import Image
 
+from photo_edit_studio.config import ROOT, settings
 from photo_edit_studio.engine import generate, metadata_text
 from photo_edit_studio.image_utils import combine_canvas_size, scaled_output_size
 from photo_edit_studio.loras import (
@@ -41,49 +47,217 @@ TEXT_PLACEHOLDER = (
 )
 SWAP_PLACEHOLDER = "Preserve the target scene, body pose, lighting, and natural skin texture."
 
-CSS = """
-.gradio-container {
-    max-width: 1520px !important;
-    margin: 0 auto !important;
-    padding: clamp(14px, 2.4vw, 36px) !important;
-    color: var(--body-text-color) !important;
+WORKFLOW_DESCRIPTIONS = {
+    EDIT_MODE: "Edit your source photograph while keeping its framing. Add references or an optional mask.",
+    COMBINE_MODE: "Blend up to three images into one new composition. Name image 1, 2, and 3 in your prompt.",
+    TEXT_MODE: "Describe the picture you want to create; no source photograph is needed.",
+    KREA_EDIT_MODE: "Edit a Krea source with an optional second reference through local ComfyUI.",
+    SWAP_MODE: "Use the target scene as Picture 1 and the donor as Picture 2. Only use images with consent.",
 }
-body {background: var(--body-background-fill) !important;}
-.hero {
-    padding: clamp(26px, 4vw, 50px);
-    border-radius: 24px;
-    background: linear-gradient(125deg, #112f3a 0%, #195968 57%, #266277 100%);
-    color: #f7fafc !important;
-    box-shadow: 0 20px 44px rgba(16, 46, 57, .16);
-    margin-bottom: 26px;
+UI_ASSETS = ROOT / "photo_edit_studio" / "assets" / "ui"
+WORKFLOW_ICONS = {
+    EDIT_MODE: "edit.svg", COMBINE_MODE: "combine.svg", TEXT_MODE: "text.svg",
+    KREA_EDIT_MODE: "krea.svg", SWAP_MODE: "swap.svg",
 }
-.hero h1 {margin: 12px 0 6px; font-size: clamp(2rem, 3.8vw, 3.5rem); letter-spacing: -.04em; line-height: 1.1; color: #fff;}
-.hero p {margin: 0; font-size: 1.05rem; line-height: 1.6; color: #e3f1f4;}
-.eyebrow {font-size: .76rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #a9e9d6;}
-.hero-badges {display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px;}
-.hero-badges span {border: 1px solid #96c6ce66; background: #ffffff17; padding: 7px 12px; border-radius: 100px; font-size: .83rem; color: #fff;}
-.section-heading {margin: 6px 0 12px;}
-.section-heading h2 {font-size: 1.1rem; letter-spacing: -.02em; margin: 0;}
-.section-heading p {color: var(--body-text-color-subdued); margin: 4px 0 0; line-height: 1.5; font-size: .9rem;}
-.panel {
-    background: var(--block-background-fill) !important;
-    border: 1px solid var(--border-color-primary) !important;
-    border-radius: 20px !important;
-    padding: clamp(14px, 1.6vw, 22px) !important;
-    box-shadow: 0 12px 32px rgba(24, 50, 63, .055) !important;
+
+
+def _release_badge() -> str:
+    changelog = ROOT / "CHANGELOG.md"
+    if not changelog.is_file():
+        return "Beta"
+    text = changelog.read_text(encoding="utf-8")
+    match = re.search(r"^## \[(\d+\.\d+\.\d+)\]", text, re.MULTILINE)
+    version = match.group(1) if match else "Unreleased"
+    modified = datetime.fromtimestamp(changelog.stat().st_mtime, tz=UTC).strftime("%Y-%m-%d")
+    return f"Beta · {version} · {modified}"
+
+
+def _mode_description(mode: str) -> str:
+    return WORKFLOW_DESCRIPTIONS[mode]
+
+
+def _workflow_tool_value(mode: str) -> str:
+    """Decode a native Gradio workflow button's stable mode value."""
+    if mode not in WORKFLOW_DESCRIPTIONS:
+        raise ValueError(f"Unknown workflow: {mode}")
+    return mode
+
+
+def _model_icon_name(key: str) -> str:
+    if key == "firered-1.1":
+        return "FireRed"
+    if key == "flux-klein-4b":
+        return "FLUX"
+    if key == "krea-2-turbo":
+        return "Krea"
+    return "Qwen"
+
+
+def _model_toolbar_label(mode: str, model_key: str, swap_key: str) -> str:
+    if mode == KREA_EDIT_MODE:
+        return "Krea · fixed"
+    key = swap_key if mode == SWAP_MODE else model_key
+    return f"{_model_icon_name(key)}  ▾"
+
+
+MODEL_ICON_FILES = {
+    "krea-2-turbo": "krea.svg",
+    "firered-1.1": "firered.svg",
+    "flux-klein-4b": "flux.svg",
 }
-.panel :is(label, .wrap) {font-weight: 600;}
-.panel input, .panel textarea, .panel select {font-size: 1rem !important; color: var(--body-text-color) !important;}
-.panel input::placeholder, .panel textarea::placeholder {color: var(--input-placeholder-color) !important; opacity: 1;}
-.panel :is(input, textarea, select, button):focus-visible {outline: 3px solid #13796d !important; outline-offset: 2px;}
-.primary {background: #116758 !important; border: 1px solid #116758 !important; color: #fff !important; font-weight: 700 !important; min-height: 48px;}
-.primary:hover {background: #0e554a !important;}
-.results-panel {margin-top: 22px;}
-.muted-note {color: var(--body-text-color-subdued); font-size: .88rem; line-height: 1.5;}
-.dark .panel input, .dark .panel textarea, .dark .panel select {color: #e9f3f4 !important;}
-.mode-hidden {display: none !important;}
-@media (max-width: 780px) {.hero {margin-bottom: 14px;} .panel {padding: 12px !important;}}
-"""
+SWAP_MODEL_KEYS = ("qwen-2511", "flux-klein-4b", "krea-2-turbo", "qwen-2.1-turbo")
+
+
+def _model_icon_file(key: str) -> str:
+    return MODEL_ICON_FILES.get(key, "qwen.svg")
+
+
+def _model_icon_for_mode(mode: str, model_key: str, swap_key: str) -> Any:
+    key = "krea-2-turbo" if mode == KREA_EDIT_MODE else swap_key if mode == SWAP_MODE else model_key
+    return gr.update(icon=UI_ASSETS / _model_icon_file(key))
+
+
+def _model_keys_for_mode(mode: str) -> tuple[str, ...]:
+    if mode == TEXT_MODE:
+        return TEXT_TO_IMAGE_KEYS
+    if mode in {EDIT_MODE, COMBINE_MODE}:
+        return tuple(key for key, spec in MODEL_SPECS.items() if spec.task == "image-to-image")
+    return tuple(MODEL_SPECS)
+
+
+def _model_choice_update(visible: bool, selected: bool) -> Any:
+    classes = ["model-choice", *HIDDEN] if not visible else ["model-choice"]
+    return gr.update(elem_classes=classes, variant="primary" if visible and selected else "secondary")
+
+
+def _model_picker_visibility(mode: str, model_key: str, swap_key: str) -> tuple[Any, ...]:
+    allowed = set(_model_keys_for_mode(mode))
+    show_models = mode not in {SWAP_MODE, KREA_EDIT_MODE}
+    show_swap = mode == SWAP_MODE
+    return (
+        *(_model_choice_update(show_models and key in allowed, key == model_key) for key in MODEL_SPECS),
+        *(_model_choice_update(show_swap, key == swap_key) for key in SWAP_MODEL_KEYS),
+    )
+
+
+def _prompt_tool_visibility(mode: str) -> tuple[Any, ...]:
+    swap = mode == SWAP_MODE
+    return (
+        gr.update(elem_classes=["toolbar-icon", *HIDDEN] if not swap else ["toolbar-icon"]),
+        gr.update(elem_classes=["toolbar-icon", *HIDDEN] if not swap else ["toolbar-icon"]),
+        gr.update(visible=mode != KREA_EDIT_MODE),
+    )
+
+
+def _toolbar_mode_updates(mode: str) -> tuple[Any, ...]:
+    canvas = mode in {COMBINE_MODE, TEXT_MODE}
+    return (
+        gr.update(value=_mode_description(mode)),
+        *_prompt_tool_visibility(mode)[:2],
+        gr.update(visible=not canvas),
+        gr.update(visible=canvas),
+        None,
+        *_popover_updates(None),
+    )
+
+
+def _workflow_buttons(mode: str) -> tuple[Any, ...]:
+    return tuple(
+        gr.update(variant="primary" if key == mode else "secondary")
+        for key in WORKFLOW_DESCRIPTIONS
+    )
+
+
+def _size_preview_for_mode(
+    mode: str, multiplier: int, resolution: str, aspect_ratio: str,
+    source: Image.Image | None, krea_source: Image.Image | None,
+    swap_body: Image.Image | None, combine_1: Image.Image | None,
+    combine_2: Image.Image | None, combine_3: Image.Image | None,
+) -> str:
+    if mode in {COMBINE_MODE, TEXT_MODE}:
+        return _canvas_size_preview(mode, resolution, combine_1, combine_2, combine_3, aspect_ratio)
+    active_source = (
+        swap_body if mode == SWAP_MODE else krea_source if mode == KREA_EDIT_MODE else source
+    )
+    return _size_preview(EDIT_MODE, multiplier, resolution, active_source, None, None, None)
+
+
+PANEL_NAMES = ("settings", "variants", "size", "model", "swap", "bfs")
+
+
+def _popover_updates(name: str | None) -> tuple[Any, ...]:
+    return tuple(gr.update(visible=key == name) for key in PANEL_NAMES)
+
+
+def _toggle_popover(name: str, current: str | None) -> tuple[Any, ...]:
+    selected = None if current == name else name
+    return (selected, *_popover_updates(selected))
+
+
+def _close_popovers() -> tuple[Any, ...]:
+    return (None, *_popover_updates(None))
+
+
+def _toggle_run_details(is_open: bool) -> tuple[bool, Any]:
+    next_open = not is_open
+    return next_open, gr.update(visible=next_open)
+
+
+def _progress_markup(message: str, fraction: float, elapsed: float) -> str:
+    from html import escape
+
+    pct = round(max(0.0, min(fraction, 1.0)) * 100)
+    return (
+        '<section class="run-progress" role="status" aria-live="polite">'
+        f'<span>{escape(message)}</span><span>{pct}% · {elapsed:.1f}s</span>'
+        f'<progress value="{pct}" max="100" aria-label="Generation progress"></progress>'
+        '</section>'
+    )
+
+
+def _stream_run(fn: Any, *args: Any):
+    """Stream existing inference callbacks to the new progress card without altering inference."""
+    events: queue.Queue[tuple[str, Any]] = queue.Queue()
+    started = time.monotonic()
+
+    def notify(fraction: float | None, *, desc: str = "") -> None:
+        events.put(("progress", (fraction, desc)))
+
+    def run() -> None:
+        try:
+            events.put(("result", fn(*args, progress=notify)))
+        except Exception as exc:  # noqa: BLE001 - forward inference errors to the UI generator
+            events.put(("error", exc))
+
+    threading.Thread(target=run, daemon=True).start()
+    fraction = 0.0
+    message = "Preparing generation…"
+    yield gr.update(), gr.update(), gr.update(), _progress_markup(message, fraction, 0.0)
+    while True:
+        try:
+            kind, data = events.get(timeout=0.2)
+        except queue.Empty:
+            yield gr.update(), gr.update(), gr.update(), _progress_markup(
+                message, fraction, time.monotonic() - started
+            )
+            continue
+        if kind == "error":
+            message = str(data).splitlines()[0]
+            yield gr.update(), gr.update(), gr.update(), _progress_markup(
+                f"Failed: {message}", fraction, time.monotonic() - started
+            )
+            raise data
+        if kind == "result":
+            images, metadata, status = data
+            yield images, metadata, status, _progress_markup("Completed", 1.0, time.monotonic() - started)
+            return
+        value, message = data
+        if value is not None:
+            fraction = value
+        yield gr.update(), gr.update(), gr.update(), _progress_markup(message, fraction, time.monotonic() - started)
+
+
+CSS = (ROOT / "photo_edit_studio" / "assets" / "ui" / "studio.css").read_text(encoding="utf-8")
 
 
 def build_theme() -> gr.themes.Soft:
@@ -142,13 +316,11 @@ def _standard_model_changed(key: str, mode: str) -> tuple[Any, ...]:
         return (*values[:5], gr.update(), *values[6:])
     if mode == TEXT_MODE:
         return (*values[:5], gr.update(value=TEXT_MODE), *values[6:])
-    return values
+    return (*values[:5], gr.update(), *values[6:])
 
 
 def _swap_model_changed(model_key: str, kind: str) -> tuple[Any, ...]:
     valid = [name for key, name in SWAP_PROFILES if key == model_key]
-    if model_key == "qwen-2.1-turbo":
-        valid.append("Body")  # No BFS Body adapter; retain instruction-only editing.
     kind = kind if kind in valid else valid[0]
     spec = MODEL_SPECS[model_key]
     choices = lora_choices(model_key)
@@ -186,10 +358,14 @@ def _swap_kind_changed(model_key: str, kind: str) -> str:
 
 
 def _swap_model_info(model_key: str, kind: str) -> str:
-    if model_key == "qwen-2.1-turbo" and kind == "Body":
-        return f"**{MODEL_SPECS[model_key].label}** · Viggle Turbo r256 · instruction-only body swap (no BFS Body LoRA)"
     profile = swap_profile(model_key, kind)
-    return f"**{MODEL_SPECS[model_key].label}** · {profile.filename} · body image sets output aspect"
+    spec = MODEL_SPECS[model_key]
+    if model_key == "qwen-2.1-turbo":
+        return (
+            f"**{spec.label}** · Viggle Turbo r256 · {kind} BFS LoRA {profile.filename} "
+            "· body image sets output aspect"
+        )
+    return f"**{spec.label}** · {profile.filename} · body image sets output aspect"
 
 
 def _upload_loras(model_key: str, files: Any, *current_names: str) -> tuple[Any, ...]:
@@ -331,28 +507,23 @@ def _mode_changed(
                 "Generate edit"
                 if is_edit or is_krea_edit
                 else "Generate swap" if is_swap else "Create image" if is_text else "Generate combination"
-            )
+            ),
+            elem_classes=["generate-action", *HIDDEN] if is_swap or is_krea_edit else ["generate-action"],
         ),
         _visibility(hidden=not (is_edit or is_swap or is_krea_edit)),
         _visibility(hidden=is_edit or is_krea_edit),
         preview,
-        _visibility(hidden=is_swap or is_krea_edit),
-        _visibility(hidden=not is_swap),
-        _visibility(hidden=is_swap or is_krea_edit),
-        _visibility(hidden=not is_swap),
-        _visibility(hidden=not is_krea_edit),
+        gr.update(elem_classes=["generate-action", *HIDDEN] if not is_swap else ["generate-action"]),
+        _visibility(hidden=True),
+        _visibility(hidden=True),
+        gr.update(elem_classes=["generate-action", *HIDDEN] if not is_krea_edit else ["generate-action"]),
         _visibility(hidden=not is_krea_edit),
         _visibility(hidden=mode not in {COMBINE_MODE, TEXT_MODE}),
     )
 
 
 def _model_choices_for_mode(mode: str, selected_key: str) -> Any:
-    if mode == TEXT_MODE:
-        keys = TEXT_TO_IMAGE_KEYS
-    elif mode in {EDIT_MODE, COMBINE_MODE}:
-        keys = tuple(key for key, spec in MODEL_SPECS.items() if spec.task == "image-to-image")
-    else:
-        keys = tuple(MODEL_SPECS)
+    keys = _model_keys_for_mode(mode)
     choices = [(MODEL_SPECS[key].label, key) for key in keys]
     value = selected_key if selected_key in keys else keys[0]
     return gr.update(choices=choices, value=value)
@@ -498,8 +669,8 @@ def _run_swap(
     if body is None or reference is None:
         raise ValueError("Upload both the target body/scene and the replacement face/person.")
     if model_key == "qwen-2.1-turbo" and kind not in {"Head", "Body"}:
-        raise ValueError("Qwen Image 2.1 Turbo supports Head or Body instruction swaps.")
-    profile = None if model_key == "qwen-2.1-turbo" and kind == "Body" else swap_profile(model_key, kind)
+        raise ValueError("Qwen Image 2.1 Turbo supports Head or Body BFS swaps.")
+    profile = swap_profile(model_key, kind)
     if model_key == "qwen-2.1-turbo" and negative_prompt.strip():
         raise ValueError("Viggle Turbo requires an empty negative prompt for swap.")
     if model_key == "krea-2-turbo" and negative_prompt.strip():
@@ -512,19 +683,17 @@ def _run_swap(
         list(extra_lora_inputs[:MAX_LORAS]),
         list(extra_lora_inputs[MAX_LORAS:]),
     )
-    if model_key == "qwen-2.1-turbo" and kind == "Head" and profile is not None:
+    if model_key == "qwen-2.1-turbo":
         extra = [lora for lora in extra if lora.name.casefold() != profile.filename.casefold()]
         if len(extra) >= MAX_LORAS:
-            raise ValueError("Qwen 2.1 Head swap supports at most four optional LoRAs in addition to the required BFS Head adapter.")
+            raise ValueError(
+                f"Qwen 2.1 {kind} swap supports at most four optional LoRAs in addition "
+                f"to the required BFS {kind} adapter."
+            )
     if model_key == "krea-2-turbo":
         prompt = instruction.strip()
     else:
-        trigger = (
-            profile.trigger if profile else
-            f"Replace the {kind.lower()} in Picture 1 using Picture 2 as the reference; "
-            "preserve the target scene, pose and background."
-        )
-        prompt = f"{trigger} {instruction.strip()}".strip()
+        prompt = f"{profile.trigger} {instruction.strip()}".strip()
     if preserve_identity:
         prompt += " Preserve the target body's pose, clothing, lighting, and scene."
     request = GenerationRequest(
@@ -542,7 +711,7 @@ def _run_swap(
         seed=int(seed),
         preserve_identity=False,
         size_multiplier=int(multiplier),
-        loras=([swap_lora(model_key, kind, bfs_weight)] if profile else []) + extra,
+        loras=[swap_lora(model_key, kind, bfs_weight)] + extra,
         workflow="swap",
         swap_kind=kind,
         krea_first_lora_weight=krea_first_weight,
@@ -612,22 +781,35 @@ def build_app() -> gr.Blocks:
     model_choices = _model_choices_for_mode(EDIT_MODE, "qwen-2511-aio")["choices"]
     with gr.Blocks(title="Local Photo Edit Studio") as app:
         gr.HTML(
-            "<section class='hero'><div class='eyebrow'>Your private creative workspace</div>"
-            "<h1>Local Photo Edit Studio</h1>"
-            "<p>Create, combine, and refine images locally with a workflow designed for your GPU.</p>"
-            "<div class='hero-badges'><span>Local by default</span><span>12 GB VRAM profile</span>"
-            "<span>One model at a time</span></div>"
-            "</section>"
+            "<header class='studio-header'><strong>Local Photo Edit Studio</strong>"
+            f"<span class='badge'>{_release_badge()}</span>"
+            "<p>Powered by <b>Javapower</b></p></header>"
         )
-        with gr.Row():
-            with gr.Column(scale=5, elem_classes="panel"):
-                gr.HTML("<div class='section-heading'><h2>01 / Creative brief</h2>"
-                        "<p>Choose a workflow, add images if needed, then describe the result.</p></div>")
-                mode = gr.Radio(
-                    [EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE],
-                    value=EDIT_MODE,
-                    label="Workflow",
-                )
+        with gr.Column(elem_classes="studio-shell", elem_id="studio-shell"):
+            mode = gr.State(EDIT_MODE)
+            with gr.Row(elem_id="studio-top"):
+                with gr.Row(elem_classes="workflow-toolbar", elem_id="studio-workflows"):
+                    workflow_buttons = {
+                        key: gr.Button(
+                            key, icon=UI_ASSETS / WORKFLOW_ICONS[key], size="sm",
+                            variant="primary" if key == EDIT_MODE else "secondary",
+                            elem_classes="workflow-choice",
+                        ) for key in WORKFLOW_DESCRIPTIONS
+                    }
+                with gr.Group(elem_id="studio-progress"):
+                    progress_card = gr.HTML(_progress_markup("Ready to create", 0, 0), elem_id="studio-progress-card")
+                    details_trigger = gr.Button(
+                        "Run details", icon=UI_ASSETS / "run-details.svg", size="sm",
+                        elem_id="studio-details-trigger",
+                    )
+            details_open = gr.State(False)
+            with gr.Column(visible=False, elem_classes="run-details-panel", elem_id="studio-run-details") as details_panel:
+                gr.Markdown("**Run details** · prompts are not stored")
+                metadata = gr.Code(label="Run metadata", language="json")
+                status = gr.Markdown("No model loaded")
+            description = gr.Markdown(_mode_description(EDIT_MODE), elem_classes="workflow-description", elem_id="studio-description")
+            output = gr.Gallery(label="Generated images", columns=2, object_fit="contain", height="auto", elem_id="studio-results")
+            with gr.Group(elem_id="studio-uploads"):
                 with gr.Group() as edit_group:
                     gr.Markdown(
                         "Edits use the uploaded image's full canvas. A model can still reframe the "
@@ -660,14 +842,12 @@ def build_app() -> gr.Blocks:
                 with gr.Group(elem_classes=HIDDEN) as swap_group:
                     gr.Markdown(
                         "**Two images:** the target body/scene is Picture 1; the donor face/person "
-                        "is Picture 2. Head swap changes the head; Body swap (Krea only) "
+                        "is Picture 2. Head swap changes the head; Body swap (Krea or Qwen 2.1 BFS) "
                         "changes the person. Use only images you have permission to edit."
                     )
                     with gr.Row():
                         swap_body = gr.Image(type="pil", label="Picture 1 · target body / scene", height=300)
                         swap_reference = gr.Image(type="pil", label="Picture 2 · replacement face / person", height=300)
-                    swap_kind = gr.Radio(["Head"], value="Head", label="Replace")
-                    bfs_weight = gr.Slider(0.1, 1.5, value=1.0, step=0.05, label="BFS adapter weight")
                 with gr.Group(elem_classes=HIDDEN) as krea_edit_group:
                     gr.Markdown(
                         "Krea 2 reference editing runs through local ComfyUI. "
@@ -678,17 +858,105 @@ def build_app() -> gr.Blocks:
                     with gr.Row():
                         krea_source = gr.Image(type="pil", label="Picture 1 · source scene", height=300)
                         krea_reference = gr.Image(type="pil", label="Picture 2 · optional reference", height=300)
-                prompt = gr.Textbox(
-                    label="Editing instruction",
-                    placeholder=EDIT_PLACEHOLDER,
-                    lines=5,
-                )
-                negative_prompt = gr.Textbox(
-                    label="Negative prompt (model-dependent)",
-                    placeholder="identity drift, altered facial structure, waxy skin, extra fingers",
-                    lines=2,
-                )
-                with gr.Accordion("Advanced · LoRAs (up to 5)", open=False):
+            with gr.Column(elem_id="studio-composer"):
+                with gr.Group(elem_classes="prompt-surface", elem_id="studio-prompt"):
+                    prompt = gr.Textbox(
+                        label="Editing instruction",
+                        placeholder=EDIT_PLACEHOLDER,
+                        lines=4,
+                    )
+                    with gr.Row(elem_classes="prompt-toolbar", elem_id="studio-prompt-toolbar"):
+                        settings_trigger = gr.Button("Settings", icon=UI_ASSETS / "settings.svg", size="sm", elem_classes="toolbar-icon")
+                        variants_trigger = gr.Button("Variants", icon=UI_ASSETS / "variants.svg", size="sm", elem_classes="toolbar-icon")
+                        size_trigger = gr.Button("Size", icon=UI_ASSETS / "size.svg", size="sm", elem_classes="toolbar-icon")
+                        swap_trigger = gr.Button("Replace", icon=UI_ASSETS / "swap.svg", size="sm", elem_classes=["toolbar-icon", *HIDDEN])
+                        bfs_trigger = gr.Button("BFS weight", icon=UI_ASSETS / "weight.svg", size="sm", elem_classes=["toolbar-icon", *HIDDEN])
+                        model_trigger = gr.Button("Qwen  ▾", icon=UI_ASSETS / "qwen.svg", size="sm", elem_classes="toolbar-icon")
+                        generate_button = gr.Button(
+                            "Generate edit",
+                            icon=UI_ASSETS / "generate.svg",
+                            variant="primary",
+                            size="sm",
+                            elem_classes="generate-action",
+                        )
+                        swap_button = gr.Button(
+                            "Generate swap",
+                            icon=UI_ASSETS / "generate.svg",
+                            variant="primary",
+                            size="sm",
+                            elem_classes=["generate-action", *HIDDEN],
+                        )
+                        krea_edit_button = gr.Button(
+                            "Generate Krea edit",
+                            icon=UI_ASSETS / "generate.svg",
+                            variant="primary",
+                            size="sm",
+                            elem_classes=["generate-action", *HIDDEN],
+                        )
+                active_panel = gr.State(None)
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-settings") as settings_panel:
+                    gr.Markdown("**Advanced model controls** · tune only if the selected model supports it.")
+                    steps = gr.Slider(1, 60, value=40, step=1, label="Inference steps")
+                    guidance = gr.Slider(0, 10, value=1.0, step=0.1, label="Guidance / CFG")
+                    true_cfg = gr.Slider(0, 10, value=4.0, step=0.1, label="True CFG (Qwen/FireRed)")
+                    strength = gr.Slider(0.05, 1.0, value=0.8, step=0.05, label="Edit strength (when supported)")
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-variants") as variants_panel:
+                    gr.Markdown(f"**Variants** · up to {settings.max_batch_count} output(s) per request on this GPU profile.")
+                    count = gr.Number(value=1, precision=0, label=f"Outputs (maximum {settings.max_batch_count})", interactive=False)
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-size") as size_panel:
+                    size_multiplier = gr.Radio(
+                        choices=[("×1 (recommended)", 1), ("×2 (VRAM-capped)", 2)], value=1,
+                        label="Size multiplier · source aspect preserved",
+                    )
+                    with gr.Group(visible=False) as combine_canvas_controls:
+                        output_resolution = gr.Radio(choices=["1K", "2K"], value="1K", label="Output resolution")
+                        aspect_ratio = gr.Radio(choices=["1:1", "9:16", "16:9"], value="1:1", label="Aspect ratio")
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-model") as model_panel:
+                    model_key = gr.Dropdown(
+                        model_choices, value="qwen-2511-aio", label="Model",
+                        show_label=False, elem_classes=HIDDEN,
+                    )
+                    swap_model = gr.Dropdown(
+                        [(MODEL_SPECS[key].label, key) for key in SWAP_MODEL_KEYS],
+                        value="qwen-2511", label="Swap model",
+                        show_label=False, elem_classes=HIDDEN,
+                    )
+                    model_choice_buttons = {
+                        key: gr.Button(
+                            MODEL_SPECS[key].label,
+                            icon=UI_ASSETS / _model_icon_file(key),
+                            size="sm",
+                            variant="primary" if key == "qwen-2511-aio" else "secondary",
+                            elem_classes="model-choice" if MODEL_SPECS[key].task == "image-to-image" else ["model-choice", *HIDDEN],
+                        )
+                        for key in MODEL_SPECS
+                    }
+                    swap_choice_buttons = {
+                        key: gr.Button(
+                            MODEL_SPECS[key].label,
+                            icon=UI_ASSETS / _model_icon_file(key),
+                            size="sm",
+                            variant="primary" if key == "qwen-2511" else "secondary",
+                            elem_classes=["model-choice", *HIDDEN],
+                        )
+                        for key in SWAP_MODEL_KEYS
+                    }
+                    krea_edit_info = gr.Markdown("**Krea 2 Turbo · reference edit via local ComfyUI**", elem_classes=HIDDEN)
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-swap") as swap_panel:
+                    swap_kind = gr.Radio(["Head"], value="Head", label="Replace")
+                with gr.Group(visible=False, elem_classes="tool-panel", elem_id="studio-panel-bfs") as bfs_panel:
+                    bfs_weight = gr.Slider(0.1, 1.5, value=1.0, step=0.05, label="BFS adapter weight")
+                with gr.Group(elem_classes="model-description-card", elem_id="studio-model-info"):
+                    model_info = gr.Markdown()
+                    size_info = gr.Markdown("Upload an image to lock output size to its aspect ratio.")
+                with gr.Group(elem_classes="negative-prompt-card", elem_id="studio-negative"):
+                    negative_prompt = gr.Textbox(
+                        label="Negative prompt (model-dependent)",
+                        placeholder="identity drift, altered facial structure, waxy skin, extra fingers",
+                        lines=2,
+                    )
+            with gr.Group(elem_classes="studio-options", elem_id="studio-options"):
+                with gr.Accordion("Advanced LoRAs · up to 5", open=False, elem_id="studio-accordion-loras"):
                     krea_first_weight = gr.Slider(
                         0.05, 2.0, value=1.0, step=0.05,
                         label="Krea2_ALWAYS_LOAD_FIRST · mandatory weight",
@@ -729,67 +997,7 @@ def build_app() -> gr.Blocks:
                         "Use adapters trained for the selected family; weights of 0 skip a slot. "
                         "Krea reference edit and swap chain selected Krea LoRAs after the required base adapter."
                     )
-                with gr.Row():
-                    generate_button = gr.Button(
-                        "Generate edit", variant="primary", elem_classes="primary"
-                    )
-                    swap_button = gr.Button(
-                        "Generate swap", variant="primary", elem_classes=["primary", *HIDDEN]
-                    )
-                    krea_edit_button = gr.Button(
-                        "Generate Krea edit", variant="primary", elem_classes=["primary", *HIDDEN]
-                    )
-                    clear_button = gr.ClearButton(value="Clear")
-            with gr.Column(scale=3, elem_classes="panel"):
-                gr.HTML("<div class='section-heading'><h2>02 / Generation settings</h2>"
-                        "<p>Select a model and fine-tune its defaults. Outputs are capped to fit 12 GB.</p></div>")
-                model_key = gr.Dropdown(model_choices, value="qwen-2511-aio", label="Model")
-                krea_edit_info = gr.Markdown(
-                    "**Krea 2 Turbo · reference edit via local ComfyUI**",
-                    elem_classes=HIDDEN,
-                )
-                swap_model = gr.Dropdown(
-                    [(MODEL_SPECS[key].label, key) for key in ("qwen-2511", "flux-klein-4b", "krea-2-turbo", "qwen-2.1-turbo")],
-                    value="qwen-2511",
-                    label="Swap model",
-                    elem_classes=HIDDEN,
-                )
-                model_info = gr.Markdown()
-                size_multiplier = gr.Radio(
-                    choices=[("×1 (recommended)", 1), ("×2 (will be VRAM-capped)", 2)],
-                    value=1,
-                    label="Size multiplier (keeps the uploaded image aspect ratio)",
-                )
-                output_resolution = gr.Radio(
-                    choices=["1K", "2K"], value="1K", label="Output resolution",
-                    render=False,
-                )
-                aspect_ratio = gr.Radio(
-                    choices=["1:1", "9:16", "16:9"], value="1:1", label="Aspect ratio",
-                    render=False,
-                )
-                with gr.Row(elem_classes=HIDDEN) as combine_canvas_controls:
-                    output_resolution.render()
-                    aspect_ratio.render()
-                size_info = gr.Markdown("Upload an image to lock output size to its aspect ratio.")
-                with gr.Accordion("Advanced · Model controls", open=False):
-                    steps = gr.Slider(1, 60, value=40, step=1, label="Inference steps")
-                    guidance = gr.Slider(0, 10, value=1.0, step=0.1, label="Guidance / CFG")
-                    true_cfg = gr.Slider(0, 10, value=4.0, step=0.1, label="True CFG (Qwen/FireRed)")
-                    strength = gr.Slider(
-                        0.05,
-                        1.0,
-                        value=0.8,
-                        step=0.05,
-                        label="Edit strength (when supported)",
-                    )
-                with gr.Row():
-                    seed = gr.Number(value=-1, precision=0, label="Seed (-1 random)")
-                    count = gr.Number(value=1, precision=0, label="Outputs", interactive=False)
-                preserve_identity = gr.Checkbox(
-                    value=True, label="Identity-preservation prompt"
-                )
-                with gr.Accordion("Face restoration", open=False):
+                with gr.Accordion("Face restoration", open=False, elem_id="studio-accordion-face"):
                     restoration = gr.Radio(["Off", "GFPGAN"], value="Off", label="Post-process")
                     restore_weight = gr.Slider(
                         0, 1, value=0.35, step=0.05, label="Restoration fidelity weight"
@@ -798,14 +1006,11 @@ def build_app() -> gr.Blocks:
                         "Use sparingly: restoration can improve micro-details but may also "
                         "shift identity."
                     )
-                unload_button = gr.Button("Unload model / release VRAM")
-                status = gr.Markdown("No model loaded")
-            with gr.Column(elem_classes=["panel", "results-panel"]):
-                gr.HTML("<div class='section-heading'><h2>03 / Results</h2>"
-                    "<p>Your images are saved locally. Progress above shows loading, each denoising step, and saving.</p></div>")
-                output = gr.Gallery(label="Generated images", columns=2, object_fit="contain", height="auto")
-                with gr.Accordion("Run details · prompts are not stored", open=False):
-                    metadata = gr.Code(label="Run metadata", language="json")
+                with gr.Accordion("Other options", open=False, elem_id="studio-accordion-other"):
+                    seed = gr.Number(value=-1, precision=0, label="Seed (-1 random)")
+                    preserve_identity = gr.Checkbox(value=True, label="Identity-preservation prompt")
+                    unload_button = gr.Button("Unload model / release VRAM")
+                    clear_button = gr.ClearButton(value="Clear")
 
         inputs = [
             mode,
@@ -835,7 +1040,8 @@ def build_app() -> gr.Blocks:
             aspect_ratio,
         ]
         generate_button.click(
-            _run, inputs=inputs, outputs=[output, metadata, status], show_progress="full"
+            lambda *values: _stream_run(_run, *values), inputs=inputs,
+            outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         swap_inputs = [
             swap_body, swap_reference, swap_model, swap_kind, prompt, negative_prompt,
@@ -845,15 +1051,16 @@ def build_app() -> gr.Blocks:
             *lora_names, *lora_weights,
         ]
         swap_button.click(
-            _run_swap, inputs=swap_inputs, outputs=[output, metadata, status], show_progress="full"
+            lambda *values: _stream_run(_run_swap, *values), inputs=swap_inputs,
+            outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         krea_edit_button.click(
-            _run_krea_reference,
+            lambda *values: _stream_run(_run_krea_reference, *values),
             inputs=[krea_source, krea_reference, prompt, negative_prompt, size_multiplier,
                     steps, guidance, seed, restoration, restore_weight, krea_first_weight,
                     *lora_names, *lora_weights],
-            outputs=[output, metadata, status],
-            show_progress="full",
+            outputs=[output, metadata, status, progress_card],
+            show_progress="hidden",
         )
         model_outputs = [
             steps,
@@ -874,7 +1081,6 @@ def build_app() -> gr.Blocks:
             size_multiplier,
             output_resolution,
             size_info,
-            generate_button,
             swap_button,
             model_key,
             swap_model,
@@ -882,6 +1088,32 @@ def build_app() -> gr.Blocks:
             krea_edit_info,
             combine_canvas_controls,
         ]
+        popover_outputs = [
+            active_panel, settings_panel, variants_panel, size_panel, model_panel,
+            swap_panel, bfs_panel,
+        ]
+        details_trigger.click(
+            _toggle_run_details, inputs=details_open, outputs=[details_open, details_panel],
+            show_progress="hidden",
+        )
+        for workflow, button in workflow_buttons.items():
+            button.click(lambda key=workflow: key, outputs=mode, show_progress="hidden").then(
+                _workflow_buttons, inputs=mode, outputs=list(workflow_buttons.values()),
+            )
+        for name, button in (
+            ("settings", settings_trigger), ("variants", variants_trigger),
+            ("size", size_trigger), ("model", model_trigger),
+            ("swap", swap_trigger), ("bfs", bfs_trigger),
+        ):
+            button.click(
+                lambda current, panel=name: _toggle_popover(panel, current),
+                inputs=[active_panel], outputs=popover_outputs, show_progress="hidden",
+            )
+        picker_outputs = [*model_choice_buttons.values(), *swap_choice_buttons.values()]
+        for key, button in model_choice_buttons.items():
+            button.click(lambda selected=key: gr.update(value=selected), outputs=model_key, show_progress="hidden")
+        for key, button in swap_choice_buttons.items():
+            button.click(lambda selected=key: gr.update(value=selected), outputs=swap_model, show_progress="hidden")
         model_change = model_key.change(
             _standard_model_changed, inputs=[model_key, mode], outputs=model_outputs
         )
@@ -892,6 +1124,22 @@ def build_app() -> gr.Blocks:
         ).then(
             _turbo_controls_for_model, inputs=[mode, model_key, swap_model],
             outputs=[steps, guidance, true_cfg, negative_prompt],
+        ).then(
+            _close_popovers, outputs=popover_outputs,
+        ).then(
+            _model_toolbar_label, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _prompt_tool_visibility, inputs=mode,
+            outputs=[swap_trigger, bfs_trigger, model_trigger],
+        ).then(
+            _model_icon_for_mode, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _model_picker_visibility, inputs=[mode, model_key, swap_model], outputs=picker_outputs,
+        ).then(
+            _size_preview_for_mode,
+            inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
+                    krea_source, swap_body, combine_1, combine_2, combine_3],
+            outputs=size_info,
         )
         mode.change(
             _mode_changed,
@@ -908,6 +1156,24 @@ def build_app() -> gr.Blocks:
         ).then(
             _turbo_controls_for_model, inputs=[mode, model_key, swap_model],
             outputs=[steps, guidance, true_cfg, negative_prompt],
+        ).then(
+            _toolbar_mode_updates, inputs=[mode],
+            outputs=[description, swap_trigger, bfs_trigger,
+                     size_multiplier, combine_canvas_controls, *popover_outputs],
+        ).then(
+            _model_toolbar_label, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _prompt_tool_visibility, inputs=mode,
+            outputs=[swap_trigger, bfs_trigger, model_trigger],
+        ).then(
+            _model_icon_for_mode, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _model_picker_visibility, inputs=[mode, model_key, swap_model], outputs=picker_outputs,
+        ).then(
+            _size_preview_for_mode,
+            inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
+                    krea_source, swap_body, combine_1, combine_2, combine_3],
+            outputs=size_info,
         )
         swap_model.change(
             _swap_model_changed,
@@ -918,18 +1184,29 @@ def build_app() -> gr.Blocks:
         ).then(
             _turbo_controls_for_model, inputs=[mode, model_key, swap_model],
             outputs=[steps, guidance, true_cfg, negative_prompt],
+        ).then(
+            _close_popovers, outputs=popover_outputs,
+        ).then(
+            _model_toolbar_label, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _prompt_tool_visibility, inputs=mode,
+            outputs=[swap_trigger, bfs_trigger, model_trigger],
+        ).then(
+            _model_icon_for_mode, inputs=[mode, model_key, swap_model], outputs=model_trigger,
+        ).then(
+            _model_picker_visibility, inputs=[mode, model_key, swap_model], outputs=picker_outputs,
         )
         swap_kind.change(
             _swap_kind_changed, inputs=[swap_model, swap_kind], outputs=model_info
         )
-        size_multiplier.change(
-            _edit_size_preview, inputs=[size_multiplier, source], outputs=size_info
-        )
-        source.change(_edit_size_preview, inputs=[size_multiplier, source], outputs=size_info)
-        canvas_size_inputs = [mode, output_resolution, combine_1, combine_2, combine_3, aspect_ratio]
-        for control in [output_resolution, combine_1, combine_2, combine_3, aspect_ratio]:
+        size_preview_inputs = [
+            mode, size_multiplier, output_resolution, aspect_ratio, source,
+            krea_source, swap_body, combine_1, combine_2, combine_3,
+        ]
+        for control in [size_multiplier, source, krea_source, swap_body,
+                        output_resolution, combine_1, combine_2, combine_3, aspect_ratio]:
             control.change(
-                _canvas_size_preview, inputs=canvas_size_inputs, outputs=size_info
+                _size_preview_for_mode, inputs=size_preview_inputs, outputs=size_info
             )
         lora_upload.upload(
             _upload_loras_for_mode,
@@ -954,6 +1231,10 @@ def build_app() -> gr.Blocks:
                 output,
                 metadata,
             ]
+        )
+        clear_button.click(
+            lambda: _progress_markup("Ready to create", 0, 0),
+            outputs=progress_card, show_progress="hidden",
         )
         app.load(_model_changed, inputs=model_key, outputs=model_outputs)
     return app

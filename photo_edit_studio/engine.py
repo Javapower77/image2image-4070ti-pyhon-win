@@ -163,7 +163,7 @@ def generate(
             notes.append(
                 "Two-image BFS Head swap with Qwen21-BFS_Head_v1.1.safetensors; results may vary."
                 if request.swap_kind == "Head" else
-                "Two-image instruction-only Body swap; no model-specific BFS Body adapter (results may vary)."
+                "Two-image BFS Body swap with Qwen21-BFS_Body_v1.1.safetensors; results may vary."
             )
 
     elapsed = time.perf_counter() - started

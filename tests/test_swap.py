@@ -24,7 +24,7 @@ def test_swap_profiles_target_exact_model_families() -> None:
     assert set(SWAP_PROFILES) == {
         ("qwen-2511", "Head"), ("flux-klein-4b", "Head"),
         ("krea-2-turbo", "Head"), ("krea-2-turbo", "Body"),
-        ("qwen-2.1-turbo", "Head"),
+        ("qwen-2.1-turbo", "Head"), ("qwen-2.1-turbo", "Body"),
     }
     with pytest.raises(ValueError, match="does not support"):
         swap_profile("qwen-2511-aio", "Head")

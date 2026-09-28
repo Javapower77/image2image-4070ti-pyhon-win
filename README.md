@@ -12,7 +12,7 @@ A private Gradio studio for local text-to-image creation, instruction-based imag
 - Output defaults are capped at a 1024-pixel longest side and one megapixel; **Combine images** and **Create from text** may optionally use a 2K canvas at 1:1, 9:16, or 16:9.
 - Batch count and Gradio concurrency are fixed at one.
 - Qwen 2511 remains an advanced, slower choice. FireRed 1.1 uses the project-managed ComfyUI GGUF Q4_K_M transformer with an automatic Lightning v1.2 8-step LoRA and CPU offload.
-- Qwen Image 2.1 + Viggle Turbo uses targeted INT8 ComfyUI weights and the mandatory unmerged rank-256 LoRA with a fixed six-step schedule for text, edit, combine and experimental instruction swaps. The Qwen Research License permits non-commercial research/evaluation only.
+- Qwen Image 2.1 + Viggle Turbo uses targeted INT8 ComfyUI weights and the mandatory unmerged rank-256 LoRA with a fixed six-step schedule for text, edit, combine and experimental Head/Body BFS swaps. The Qwen Research License permits non-commercial research/evaluation only.
 - Models, inputs, and outputs stay local; Gradio analytics and public sharing are disabled by default.
 
 ## Windows quick start
@@ -34,10 +34,11 @@ Setup can also install and download in one pass with `.\scripts\setup.ps1 -Downl
 
 ## Features
 
+- Mockup-inspired Beta studio UI: a 70% left creative canvas with workflow icons beside elapsed-time progress, a card for each workflow description, and a Run Details icon opening a popup; the 30% right rail starts with LoRA/restoration/other options. Prompt-toolbar popovers, circular Generate, the one-output GPU cap and backend routes remain unchanged. See `docs/USAGE.md`.
 - Edit a source image or combine up to three reference images with 1K/2K and square/portrait/landscape output options.
 - Create new images from text using Krea 2 Turbo, FLUX.2 Klein 4B or Qwen Image 2.1 Turbo at 1K/2K and square/portrait/landscape aspect ratios.
 - Edit a Krea 2 source image using one optional reference through project-managed ComfyUI/Krea2Edit (opt-in setup in the same `.venv`). See `docs/KREA_REFERENCES.md`.
-- Swap a head using Qwen 2511, FLUX.2 Klein 4B, or Krea 2; swap a person/body with Krea 2 or attempt instruction-based Head/Body swaps with Qwen 2.1 Turbo (no BFS LoRA). See `docs/SWAP.md` for setup and limitations.
+- Swap a head using Qwen 2511, FLUX.2 Klein 4B, Krea 2, or Qwen Image 2.1 Turbo; swap a person/body with Krea 2 or Qwen 2.1 Turbo. Qwen 2.1 Head/Body use local BFS LoRAs (`Qwen21-BFS_Head_v1.1.safetensors` / `Qwen21-BFS_Body_v1.1.safetensors` in `models/loras/qwen21/`), not `--bfs-swap`. See `docs/SWAP.md` for setup and limitations.
 - Identity-preservation prompt mode, seeds, CFG, true CFG, steps, strength, and masks.
 - Local, family-scoped LoRA library with up to five selected adapters.
 - Optional local GFPGAN post-processing.

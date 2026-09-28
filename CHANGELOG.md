@@ -2,11 +2,11 @@
 
 All notable changes are documented here.
 
-## Unreleased
+## [0.9.0] - 2026-09-28
 
 ### Added
 
-- Qwen Image 2.1 **Head** swap now automatically applies the locally supplied `Qwen21-BFS_Head_v1.1.safetensors` after mandatory Viggle Turbo and before optional adapters; Body swap remains instruction-only.
+- Qwen Image 2.1 **Head** and **Body** swaps now automatically apply the locally supplied `Qwen21-BFS_Head_v1.1.safetensors` or `Qwen21-BFS_Body_v1.1.safetensors` after mandatory Viggle Turbo and before optional adapters.
 - Qwen Image 2.1 now supports up to five optional family-isolated `.safetensors` LoRAs at individual UI weights, chained after the mandatory unmerged Viggle Turbo LoRA for text, edit, combine and swap workflows.
 - Qwen Image 2.1 + Viggle Turbo r256 as a six-step, INT8/low-VRAM ComfyUI option for Edit source, Combine images, Create from text and experimental two-image Head/Body instruction swaps; targeted ComfyUI assets and Windows download preset (`qwen-2.1`). Requires non-commercial Qwen Research License compliance.
 - FireRed 1.1 ComfyUI GGUF Q4_K_M plus automatic Lightning 8-step v1.2 support with targeted downloads and a separate LoRA library.
@@ -15,6 +15,14 @@ All notable changes are documented here.
 
 ### Changed
 
+- Replaced the native model dropdown with per-row brand icons from the mockup Icons-MODELS set, hid the leftover Gradio combobox in the model popover, and matched prompt-toolbar hover to the top workflow toolbar gray (`#f0efec`). Inference callbacks are unchanged.
+- Split the prompt composer into a white prompt-and-toolbar card and a separate white model-description card, replaced the right-arrow submit control with the mockup up-arrow, and removed the gray toolbar band. Inference callbacks are unchanged.
+- Placed the workflow toolbar and progress card together atop the left canvas, wrapped each workflow description in its own card, and moved LoRAs/restoration/other options to the top of the right rail. The far-right progress icon now opens Run Details as a dismissible popup without changing generation callbacks.
+- Matched the mockup's left/right proportions with a fixed 70% creative canvas and 30% options rail; normalized card widths and replaced approximate workflow/model/toolbar graphics with SVG path geometry from `docs/mockup-ui/Icons.html`.
+- Reworked the mockup UI into a real desktop left-rail/right-canvas grid with compact icon-only workflow and generation controls, SVG model indicators, and responsive single-column mobile layout. Kept the same Gradio model and inference handlers.
+- Refined the mockup-based UI with anchored, shadowed prompt-tool popovers, synchronized model-family SVG icons, and Escape/outside-click dismissal using a browser-side visual layer; the underlying Gradio controls and inference callbacks remain unchanged.
+- Rebranded the Gradio UI into a single-column Local Photo Edit Studio Beta layout following `docs/mockup-ui/UI-MOCKUP.md`. The five workflows use icon buttons; model, sizing, output variants, advanced model controls, swap type and BFS weight move into the prompt toolbar with mode-aware panels. Run details, image results, uploads and three shared option accordions are regrouped without changing model inference or the one-output GPU cap.
+- Added visible progress with overall completion and elapsed time, model-family icons, an active-workflow description, and a Beta release badge driven by the changelog. Krea reference edit keeps its dedicated model path without a model picker.
 - Removed the unsupported FLUX.2 Klein 9B entry from application model selection and downloads.
 - All Krea 2 modes now require `Krea2_ALWAYS_LOAD_FIRST.safetensors` as the first ComfyUI LoRA, with a dedicated nonzero weight control in the UI. Krea text-to-image now runs through ComfyUI to guarantee this ordering.
 

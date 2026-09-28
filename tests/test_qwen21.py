@@ -23,7 +23,7 @@ from photo_edit_studio.loras import (
     selected_loras,
 )
 from photo_edit_studio.models.comfy_swap import configure_qwen21_graph, resolve_qwen21_lora_names
-from photo_edit_studio.swap import QWEN21_BFS_HEAD_FILE, swap_lora
+from photo_edit_studio.swap import QWEN21_BFS_BODY_FILE, QWEN21_BFS_HEAD_FILE, swap_lora
 from photo_edit_studio.types import GenerationRequest, LoraSpec
 from photo_edit_studio.ui import (
     TEXT_MODE,
@@ -88,6 +88,12 @@ def test_qwen21_text_and_swap_model_options(tmp_path: Path) -> None:
     head = _swap_model_changed("qwen-2.1-turbo", "Head")
     assert head[0]["choices"] == ["Head", "Body"]
     assert QWEN21_BFS_HEAD_FILE in head[4]
+    assert "instruction-only" not in head[4]
+    body = _swap_model_changed("qwen-2.1-turbo", "Body")
+    assert body[0]["value"] == "Body"
+    assert QWEN21_BFS_BODY_FILE in body[4]
+    assert "Body BFS LoRA" in body[4]
+    assert "instruction-only" not in body[4]
     assert list_lora_files("qwen-2.1-turbo", root=tmp_path) == []
     with pytest.raises(ValueError, match="qwen21 library"):
         selected_loras("qwen-2.1-turbo", ["2511-lora.safetensors"], [1.0], root=tmp_path)
@@ -188,29 +194,47 @@ def test_qwen21_controls_lock_viggle_schedule() -> None:
     assert all(control["interactive"] is True for control in normal)
 
 
-def test_qwen21_swap_uses_two_images_without_bfs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_qwen21_body_swap_loads_bfs_after_viggle_and_before_optional_loras(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from photo_edit_studio import ui
+    from photo_edit_studio.config import settings
     from photo_edit_studio.types import GenerationResult
 
+    monkeypatch.setattr(settings, "lora_dir", tmp_path)
+    family = tmp_path / "qwen21"
+    family.mkdir()
+    (family / QWEN21_BFS_BODY_FILE).write_bytes(b"test")
+    (family / "style.safetensors").write_bytes(b"test")
     seen: list[GenerationRequest] = []
 
-    def fake_generate(request: GenerationRequest, *_args: object, **_kwargs: object) -> GenerationResult:
-        seen.append(request)
-        return GenerationResult([Image.new("RGB", (64, 64))], request.seed, 0.1, request.model_key)
+    def fake_generate(req: GenerationRequest, *_args: object, **_kwargs: object) -> GenerationResult:
+        seen.append(req)
+        return GenerationResult([Image.new("RGB", (64, 64))], req.seed, 0.1, req.model_key)
 
     monkeypatch.setattr(ui, "generate", fake_generate)
     monkeypatch.setattr(ui, "metadata_text", lambda _result: "{}")
-    values = [NONE_CHOICE] * 5 + [1.0] * 5
     _run_swap(
         Image.new("RGB", (64, 64)), Image.new("RGB", (64, 64)),
         "qwen-2.1-turbo", "Body", "Keep the shirt", "", 1, 6, 1.0, 1.0,
-        0.8, 19, True, "Off", 0.35, 1.0, 1.0, *values,
+        0.8, 19, True, "Off", 0.35, 0.7, 1.0,
+        QWEN21_BFS_BODY_FILE, "style.safetensors", NONE_CHOICE, NONE_CHOICE, NONE_CHOICE,
+        1.0, 0.5, 1.0, 1.0, 1.0,
         progress=lambda *_args, **_kwargs: None,
     )
     assert len(seen) == 1
     assert seen[0].workflow == "swap" and seen[0].swap_kind == "Body"
-    assert len(seen[0].images) == 2 and seen[0].loras == []
-    assert "Picture 2" in seen[0].prompt
+    assert len(seen[0].images) == 2
+    assert [lora.name for lora in seen[0].loras] == [QWEN21_BFS_BODY_FILE, "style.safetensors"]
+    assert seen[0].loras[0].weight == 0.7
+    assert "body_swap:" in seen[0].prompt
+    graph = configure_qwen21_graph(qwen21_turbo_template(), seen[0], ("body.png", "person.png"))
+    assert graph["2"]["class_type"] == "ViggleTurboLora"
+    assert graph["40"]["inputs"] == {
+        "model": ["2", 0], "lora_name": os.path.join("qwen21", QWEN21_BFS_BODY_FILE), "strength_model": 0.7,
+    }
+    assert graph["41"]["inputs"]["model"] == ["40", 0]
+    assert graph["8"]["inputs"]["model"] == ["41", 0]
 
 
 def test_qwen21_head_swap_loads_bfs_after_viggle_and_before_optional_loras(
@@ -262,6 +286,16 @@ def test_qwen21_missing_head_file_reports_local_install_path(
     monkeypatch.setattr(settings, "lora_dir", tmp_path)
     with pytest.raises(FileNotFoundError, match="Place the Qwen 2.1 head-swap LoRA"):
         swap_lora("qwen-2.1-turbo", "Head")
+
+
+def test_qwen21_missing_body_file_reports_local_install_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from photo_edit_studio.config import settings
+
+    monkeypatch.setattr(settings, "lora_dir", tmp_path)
+    with pytest.raises(FileNotFoundError, match="Place the Qwen 2.1 body-swap LoRA"):
+        swap_lora("qwen-2.1-turbo", "Body")
 
 
 def test_qwen21_targeted_download_and_idempotence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

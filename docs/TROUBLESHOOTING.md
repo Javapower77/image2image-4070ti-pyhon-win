@@ -30,7 +30,7 @@ The bundled graph connects both `Krea2EditGroundedEncode` nodes and the `Krea2Ed
 
 ## BFS LoRA missing / swap model mismatch
 
-Run `python scripts/download_models.py --bfs-swap`. Use Qwen 2511 or FLUX.2 Klein 4B for head swaps, or Krea 2 for head/body swaps. Other models are intentionally excluded; cross-family LoRAs cannot be loaded safely.
+For Qwen 2511, FLUX.2 Klein 4B, and Krea 2, run `python scripts/download_models.py --bfs-swap`. Qwen Image 2.1 Head/Body LoRAs are not in that download: copy `Qwen21-BFS_Head_v1.1.safetensors` and `Qwen21-BFS_Body_v1.1.safetensors` into `models/loras/qwen21/`. Other models are intentionally excluded; cross-family LoRAs cannot be loaded safely.
 
 ## Krea swap workflow missing or ComfyUI rejects the prompt
 
