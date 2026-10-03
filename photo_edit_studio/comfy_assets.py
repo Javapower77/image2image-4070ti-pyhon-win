@@ -9,6 +9,7 @@ COMFY_KREA_FILES = (
 KREA_EDIT_REPO = "conradlocke/krea2-identity-edit"
 KREA_EDIT_FILE = "krea2_identity_edit_v1_2_r128.safetensors"
 KREA_FIRST_LORA_FILE = "Krea2_ALWAYS_LOAD_FIRST.safetensors"
+KREA_REMIX_LORA_FILE = "Krea2-Remix_Patreon.safetensors"
 KREA_FIRST_LORA_REPO = "INFOMSG/Krea2_TextFusion"
 KREA_FIRST_LORA_REMOTE = "Krea2_TextFusion_Refusal_Reduction.safetensors"
 KREA_TURBO_LORA_FILE = "krea2_turbo_lora_rank_64_bf16.safetensors"
@@ -49,6 +50,16 @@ def missing_assets(root: object) -> list[str]:
     paths.append(base / "loras" / KREA_EDIT_FILE)
     paths.append(base / "loras" / KREA_FIRST_LORA_FILE)
     return [str(path) for path in paths if not path.is_file()]
+
+
+def missing_krea_remix_assets(root: object) -> list[str]:
+    """Remix has its own training adapter and does not require identity-edit."""
+    from pathlib import Path
+
+    base = Path(root) / "models"
+    files = (*COMFY_KREA_FILES, f"loras/{KREA_FIRST_LORA_FILE}",
+             f"loras/{KREA_REMIX_LORA_FILE}")
+    return [str(base / file) for file in files if not (base / file).is_file()]
 
 
 def missing_firered_assets(root: object) -> list[str]:

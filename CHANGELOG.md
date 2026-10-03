@@ -1,10 +1,31 @@
 # Changelog
 
-All notable changes are documented here.
+<!-- markdownlint-configure-file { "MD024": { "siblings_only": true } } -->
 
-## [0.9.0] - 2026-09-28
+All notable changes are grouped by day, newest first. Release versions are retained
+within each day; new entries belong under the date they were made, grouped as
+Added, Changed, Fixed, or Removed as appropriate.
+
+## 2026-10-02
 
 ### Added
+
+- Krea-only **Composition remix** operation for one uploaded composed canvas, using the supplied Remix adapter on the first pass and base-model refinement. Reuses existing FP8 assets, caps output at 1024, and omits upstream upscaling/DetailDaemon; see `docs/KREA_REMIX.md` for differences and prerequisites.
+
+### Changed
+
+- Windows ComfyUI setup now installs the Ostris Krea2 edit extension required by Composition remix.
+
+### Fixed
+
+- Generate buttons now stream four Gradio outputs (gallery, run details, status, progress) instead of returning the `_stream_run` generator object. This unblocks Krea reference edit (and Edit/Swap) on Gradio 6.
+- Restricted the model-download ignore rule to the root `models/` folder so application source under `photo_edit_studio/models/` is no longer hidden from Git.
+
+## 2026-09-28
+
+### [0.9.0]
+
+#### Added
 
 - Qwen Image 2.1 **Head** and **Body** swaps now automatically apply the locally supplied `Qwen21-BFS_Head_v1.1.safetensors` or `Qwen21-BFS_Body_v1.1.safetensors` after mandatory Viggle Turbo and before optional adapters.
 - Qwen Image 2.1 now supports up to five optional family-isolated `.safetensors` LoRAs at individual UI weights, chained after the mandatory unmerged Viggle Turbo LoRA for text, edit, combine and swap workflows.
@@ -13,7 +34,7 @@ All notable changes are documented here.
 - **Combine images** now offers 1K/2K output and 1:1, 9:16, or 16:9 aspect ratios, with a live size preview, separate combine-only memory budget, and saved aspect metadata.
 - **Create from text** now shares the 1K/2K and 1:1/9:16/16:9 canvas controls, live preview, output budget, and saved canvas metadata; its selected dimensions reach the Krea ComfyUI graph.
 
-### Changed
+#### Changed
 
 - Replaced the native model dropdown with per-row brand icons from the mockup Icons-MODELS set, hid the leftover Gradio combobox in the model popover, and matched prompt-toolbar hover to the top workflow toolbar gray (`#f0efec`). Inference callbacks are unchanged.
 - Split the prompt composer into a white prompt-and-toolbar card and a separate white model-description card, replaced the right-arrow submit control with the mockup up-arrow, and removed the gray toolbar band. Inference callbacks are unchanged.
@@ -26,7 +47,7 @@ All notable changes are documented here.
 - Removed the unsupported FLUX.2 Klein 9B entry from application model selection and downloads.
 - All Krea 2 modes now require `Krea2_ALWAYS_LOAD_FIRST.safetensors` as the first ComfyUI LoRA, with a dedicated nonzero weight control in the UI. Krea text-to-image now runs through ComfyUI to guarantee this ordering.
 
-### Fixed
+#### Fixed
 
 - **Krea reference edit** now hides the unrelated three-image **Combine images** upload section and the duplicate Krea text-to-image model description; its dedicated two-image controls and workflow label remain visible.
 - **Create from text** now renders with the text-capable model selected in **02 / Generation settings**: Krea 2 Turbo through ComfyUI or FLUX.2 Klein 4B through Diffusers. The text-mode dropdown excludes image-edit-only and unsupported models, and FLUX text generation no longer expects an uploaded image.
@@ -34,53 +55,59 @@ All notable changes are documented here.
 - Reject missing, duplicate, wrong-family or unsupported optional Krea adapter files instead of silently ignoring them.
 - Selecting the required identity-edit LoRA in Krea reference edit now adjusts its existing graph-node weight rather than raising a duplicate-base error; the BFS swap weight remains controlled by its dedicated slider.
 
-## [0.8.0] - 2026-09-23
+## 2026-09-23
 
-### Project-managed Krea backend
+### [0.8.0]
+
+#### Added · Project-managed Krea backend
 
 - Added opt-in project-local ComfyUI and Krea2Edit setup in the Python 3.11 `.venv`.
 - Added on-demand loopback subprocess management with low-VRAM startup, local logging and owned-process shutdown.
 - Bundled a validated 1–2 image Krea2Edit API graph usable for reference and BFS head/body swaps without manual workflow export.
 - Added an explicit `--comfy-krea` download option for the four required ComfyUI-format weights; no automatic multi-gigabyte downloads.
 
-## [0.7.1] - 2026-09-23
+### [0.7.1]
 
-### Krea reference editing
+#### Added · Krea reference editing
 
 - Added a dedicated **Krea reference edit** UI workflow with source image and optional second reference.
 - Added a separate ComfyUI Krea2Edit API graph adapter that verifies second-image grounding and latent wiring before inference.
 - Retained Krea text-to-image through Diffusers and the existing BFS head/body swap workflows.
 - Restricted the ComfyUI bridge to local loopback endpoints and documented required external setup.
 
-## [0.7.0] - 2026-09-23
+### [0.7.0]
 
-### Added
+#### Added
 
 - Separate two-image **Swap head / body** section preserving the other generation workflows and controls.
 - Qwen 2511 and FLUX.2 Klein 4B BFS head swap adapters; Krea 2 BFS head/body swap through a local ComfyUI editing backend and validated API-format workflows.
 - Explicit `--bfs-swap` downloader for four matching BFS LoRAs; no implicit download of the full upstream collection.
 - `docs/SWAP.md` with model compatibility, required ComfyUI setup, consent, and quality limitations.
 
-## [0.6.1] - 2026-09-17
+## 2026-09-17
 
-### FLUX.2 Klein 4B custom encoder
+### [0.6.1]
+
+#### Added · FLUX.2 Klein 4B custom encoder
 
 - Added a FLUX.2 Klein 4B-only Qwen3 GGUF text encoder loaded from `models/qwen3-4b-alb-q4_0.gguf`.
 - Added compatibility for the existing `qwen3-4b-abl-q4_0.gguf` filename and an environment override.
 - Added the `gguf` dependency and documented CUDA dequantization/system-memory behavior.
 
-## [0.6.0] - 2026-09-17
+### [0.6.0]
 
-### Krea 2 text-to-image
+#### Added · Krea 2 text-to-image
 
 - Added gated `krea/Krea-2-Turbo` through Diffusers `Krea2Pipeline`.
 - Added a **Create from text** workflow with 8-step, CFG-0, 1K low-VRAM defaults.
 - Added Krea 2-specific LoRA storage and multi-adapter loading through Diffusers/PEFT.
 - Added a `krea-2` Windows download preset and license/access documentation.
 
-## [0.5.0] - 2026-09-15
+## 2026-09-15
 
-### Windows and low-VRAM refactor
+### [0.5.0]
+
+#### Changed · Windows and low-VRAM refactor
 
 - Rebuilt the missing model package with local Diffusers adapters, registry, Rapid AIO loader, and CUDA memory management.
 - Added Windows PowerShell setup and launch scripts for Python 3.11 and CUDA PyTorch.
@@ -90,66 +117,70 @@ All notable changes are documented here.
 - Made Rapid AIO and Klein 4B the recommended UI choices and marked Klein 9B unsupported on 12 GB.
 - Updated all setup, architecture, model, usage, and troubleshooting documentation.
 
-## [0.4.3] - 2026-09-14
+## 2026-09-14
 
-### Fixed
+### [0.4.3]
+
+#### Fixed
 
 - Changing a LoRA weight no longer crashes with `Setting requires_grad=True on inference tensor`. Adapter weights are applied in inference mode, and generation uses `torch.no_grad()` instead of `torch.inference_mode()`.
 
-## [0.4.2] - 2026-09-14
+### [0.4.2]
 
-### Fixed
+#### Fixed
 
 - Combine-images size preview no longer crashes with `needed: 7, got: 6` when some image slots are empty. Hidden Gradio widgets are not used as event inputs.
 
-## [0.4.1] - 2026-09-14
+### [0.4.1]
 
-### Changed
+#### Changed
 
 - Combine-images output size is now a 1K / 2K / 4K canvas (1024, 2048, or 4096 square). Edit source still uses ×1 / ×2 / ×3 from the source aspect ratio.
 
-## [0.4.0] - 2026-09-14
+### [0.4.0]
 
-### Added
+#### Added
 
 - Output size now follows the first uploaded image's aspect ratio. Choose ×1, ×2, or ×3 instead of independent width/height sliders (clamped to 512–2048 and aligned to 64 px).
 - Combine-images workflow: upload up to three references and a prompt to generate one new picture. Image 1 still sets the aspect ratio.
 
-## [0.3.2] - 2026-09-12
+## 2026-09-12
 
-### Fixed
+### [0.3.2]
+
+#### Fixed
 
 - Rapid AIO load no longer builds the transformer on the meta device, which caused `Cannot copy out of meta tensor; no data!` when moving RoPE caches or enabling CPU offload.
 
-## [0.3.1] - 2026-09-12
+### [0.3.1]
 
-### Fixed
+#### Fixed
 
 - CUDA out-of-memory on Qwen 2511 / Rapid AIO: model CPU offload, VAE tiling, sequential batch images, allocator `expandable_segments`, and Rapid AIO no longer loads two transformers.
 
-## [0.3.0] - 2026-09-12
+### [0.3.0]
 
-### Added
+#### Added
 
 - Qwen Image Edit 2511 Rapid AIO as a selectable model. It loads the distilled ComfyUI transformer from `models/repos/Qwen--Qwen-Image-Edit-2511-AIO` onto the official 2511 pipeline.
 
-## [0.2.0] - 2026-09-12
+### [0.2.0]
 
-### Added
+#### Added
 
 - Local LoRA library with upload, up to five selected adapters per run, and per-LoRA weights.
 - Qwen/FireRed and FLUX.2 Klein family LoRA folders under `models/loras/`.
 
-## [0.1.1] - 2026-09-12
+### [0.1.1]
 
-### Changed
+#### Changed
 
 - Removed extra application-level content filters and the permission checkbox.
 - Left model-native and license-required safeguards enabled.
 
-## [0.1.0] - 2026-09-12
+### [0.1.0]
 
-### Added
+#### Added
 
 - Local Gradio photo editing studio with a modern two-panel interface.
 - Lazy, one-at-a-time adapters for Qwen Image Edit 2511, FireRed Image Edit 1.1, and FLUX.2 [klein] 4B/9B.

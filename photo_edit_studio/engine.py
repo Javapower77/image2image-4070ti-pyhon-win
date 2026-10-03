@@ -43,7 +43,16 @@ def generate(
             raise ValueError("Choose a text-capable model for Create from text.")
         if request.images:
             raise ValueError("Create from text does not accept source images.")
-    if request.workflow == "krea-reference":
+    if request.workflow == "krea-remix":
+        from photo_edit_studio.models.comfy_swap import krea_remix_size, validate_krea_remix_request
+
+        validate_krea_remix_request(request)
+        if restoration != "Off":
+            raise ValueError("Krea remix returns generated output only; face restoration must be Off.")
+        request.compose = False  # Composition already happened in the uploaded canvas.
+        request.width, request.height = krea_remix_size(request)
+        input_max_side = 1024
+    elif request.workflow == "krea-reference":
         if spec.key != "krea-2-turbo" or not 1 <= len(request.images) <= 2:
             raise ValueError("Krea reference edit requires a source and at most one reference.")
         request.compose = False
@@ -90,10 +99,13 @@ def generate(
         max_side=(settings.combine_max_output_side if canvas_workflow else settings.max_output_side),
         max_pixels=(settings.combine_max_output_pixels if canvas_workflow else settings.max_output_pixels),
     )
-    if (request.width, request.height) != requested_size:
+    if (request.width, request.height) != requested_size and request.workflow != "krea-remix":
         input_max_side = max(request.width, request.height)
     request.count = min(request.count, settings.max_batch_count)
-    input_limit = 2 if request.workflow in {"swap", "krea-reference"} else spec.max_images
+    input_limit = (
+        1 if request.workflow == "krea-remix" else
+        2 if request.workflow in {"swap", "krea-reference"} else spec.max_images
+    )
     request.images = [
         normalize_image(image, max_side=input_max_side)
         for image in request.images[:input_limit]
@@ -102,7 +114,7 @@ def generate(
         request.seed = secrets.randbelow(2**31 - 1)
 
     started = time.perf_counter()
-    if request.workflow in {"swap", "krea-reference", "krea-text"} and request.model_key == "krea-2-turbo":
+    if request.workflow in {"swap", "krea-reference", "krea-text", "krea-remix"} and request.model_key == "krea-2-turbo":
         from photo_edit_studio.models.comfy_swap import ComfyKreaSwapAdapter
 
         model_manager.unload()
@@ -110,6 +122,8 @@ def generate(
     else:
         adapter = model_manager.get(request.model_key)
     images = adapter.generate(request, progress=progress)
+    if request.workflow == "krea-remix" and len(images) != 1:
+        raise RuntimeError("Krea remix must return exactly one generated output.")
     if progress is not None:
         progress.update(0.87, "Finishing generated images")
     notes: list[str] = []
@@ -118,7 +132,17 @@ def generate(
             f"Low-VRAM limit reduced {requested_size[0]}×{requested_size[1]} to "
             f"{request.width}×{request.height}."
         )
-    if request.workflow == "krea-reference":
+    if request.workflow == "krea-remix":
+        notes.append(
+            f"Krea Ostris remix of one uploaded canvas, capped at 1024: {request.width}×{request.height}. "
+            "Remix LoRA first pass only; mandatory first LoRA on both passes; no upscale."
+        )
+        notes.append(
+            "Refinement re-encodes the same prompt without image references: this removes reference_latents "
+            "but also vision-derived text context, approximating reference-metadata removal. "
+            "Euler kl_optimal then simple schedules are an adapted handoff, not exact upstream parity."
+        )
+    elif request.workflow == "krea-reference":
         notes.append(f"Krea reference edit with {len(request.images)} source/reference image(s).")
     elif request.workflow == "swap":
         notes.append(f"{request.swap_kind} swap: body/scene first, face/person reference second.")

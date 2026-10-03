@@ -12,6 +12,7 @@ import httpx
 from photo_edit_studio.comfy_assets import (
     missing_assets,
     missing_firered_assets,
+    missing_krea_remix_assets,
     missing_qwen21_assets,
 )
 from photo_edit_studio.config import settings
@@ -53,7 +54,9 @@ def stop_backend() -> None:
         _log_handle = None
 
 
-def ensure_backend(*, enabled: bool | None = None, model_key: str = "krea-2-turbo") -> bool:
+def ensure_backend(
+    *, enabled: bool | None = None, model_key: str = "krea-2-turbo", workflow: str = "standard"
+) -> bool:
     """Start only our own local ComfyUI; never claim an unrelated server is embedded."""
     global _process, _log_handle
     if enabled is None:
@@ -74,7 +77,10 @@ def ensure_backend(*, enabled: bool | None = None, model_key: str = "krea-2-turb
         raise FileNotFoundError(
             f"Embedded ComfyUI not installed at {main}. Run scripts/setup-comfy.ps1."
         )
-    if model_key == "firered-1.1":
+    if model_key == "krea-2-turbo" and workflow == "krea-remix":
+        missing = missing_krea_remix_assets(settings.comfy_dir)
+        hint = "--comfy-krea (place Krea2-Remix_Patreon.safetensors in vendor/ComfyUI/models/loras manually)"
+    elif model_key == "firered-1.1":
         missing = missing_firered_assets(settings.comfy_dir)
         hint = "firered-1.1"
     elif model_key == "qwen-2.1-turbo":

@@ -1,6 +1,6 @@
 .venv/
 .cache/
-models/
+/models/
 vendor/
 outputs/
 __pycache__/

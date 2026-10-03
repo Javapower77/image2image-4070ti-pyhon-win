@@ -106,6 +106,44 @@ def krea_reference_template() -> dict[str, dict[str, Any]]:
     }
 
 
+def krea_remix_template() -> dict[str, dict[str, Any]]:
+    """Adapted 12GB remix: source latent, Ostris edit, then reference-free refine.
+
+    The bridge inserts the mandatory first LoRA before BOTH model branches.
+    Re-encoding the same text for refinement avoids reference_latents but also
+    drops the vision-derived text context (an approximation of metadata removal).
+    The two schedules deliberately differ, matching the approved adaptation.
+    """
+    from photo_edit_studio.comfy_assets import KREA_REMIX_LORA_FILE
+
+    return {
+        "55": _node("UNETLoader", unet_name="krea2_turbo_fp8_scaled.safetensors", weight_dtype="default"),
+        "56": _node("CLIPLoader", clip_name="qwen3vl_4b_fp8_scaled.safetensors", type="krea2", device="default"),
+        "57": _node("VAELoader", vae_name="qwen_image_vae.safetensors"),
+        "71": _node("LoraLoaderModelOnly", model=["55", 0], lora_name=KREA_REMIX_LORA_FILE, strength_model=1.0),
+        "79": _node("Krea2OstrisEditModelPatch", model=["71", 0], kv_cache=True),
+        "80": _node("Krea2OstrisEditModelPatch", model=["55", 0], kv_cache=True),
+        "72": _node("LoadImage", image="source.png"),
+        "73": _node("ImageScale", image=["72", 0], upscale_method="lanczos",
+                    width=1024, height=1024, crop="disabled"),
+        "74": _node("VAEEncode", pixels=["73", 0], vae=["57", 0]),
+        "84": _node("TextEncodeKrea2OstrisEdit", clip=["56", 0], prompt="remix",
+                    vae=["57", 0], image1=["73", 0]),
+        "85": _node("CLIPTextEncode", clip=["56", 0], text=""),
+        "86": _node("CLIPTextEncode", clip=["56", 0], text="remix"),
+        "53": _node("KSamplerAdvanced", model=["79", 0], positive=["84", 0], negative=["85", 0],
+                    latent_image=["74", 0], add_noise="enable", noise_seed=0, steps=9, cfg=1.0,
+                    sampler_name="euler", scheduler="kl_optimal", start_at_step=1,
+                    end_at_step=8, return_with_leftover_noise="enable"),
+        "54": _node("KSamplerAdvanced", model=["80", 0], positive=["86", 0], negative=["85", 0],
+                    latent_image=["53", 0], add_noise="disable", noise_seed=0, steps=9, cfg=1.0,
+                    sampler_name="euler", scheduler="simple", start_at_step=8,
+                    end_at_step=9, return_with_leftover_noise="disable"),
+        "58": _node("VAEDecode", samples=["54", 0], vae=["57", 0]),
+        "29": _node("SaveImage", images=["58", 0], filename_prefix="photo_edit_krea_remix"),
+    }
+
+
 def krea_text_template() -> dict[str, dict[str, Any]]:
     """Text-only Krea Turbo graph; adapter chain is added by the Comfy bridge."""
     return {

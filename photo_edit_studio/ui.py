@@ -66,7 +66,7 @@ def _release_badge() -> str:
     if not changelog.is_file():
         return "Beta"
     text = changelog.read_text(encoding="utf-8")
-    match = re.search(r"^## \[(\d+\.\d+\.\d+)\]", text, re.MULTILINE)
+    match = re.search(r"^#{2,3} \[(\d+\.\d+\.\d+)\]", text, re.MULTILINE)
     version = match.group(1) if match else "Unreleased"
     modified = datetime.fromtimestamp(changelog.stat().st_mtime, tz=UTC).strftime("%Y-%m-%d")
     return f"Beta · {version} · {modified}"
@@ -255,6 +255,19 @@ def _stream_run(fn: Any, *args: Any):
         if value is not None:
             fraction = value
         yield gr.update(), gr.update(), gr.update(), _progress_markup(message, fraction, time.monotonic() - started)
+
+
+def _stream_click(fn: Any):
+    """Gradio 6 iterates only generator *functions*. A lambda that returns
+    `_stream_run(...)` is one output (the generator object) and raises
+    'needed: 4, returned: 1'."""
+
+    def click(*args: Any):
+        yield from _stream_run(fn, *args)
+
+    click.__name__ = getattr(fn, "__name__", "click")
+    click.__qualname__ = f"_stream_click.{click.__name__}"
+    return click
 
 
 CSS = (ROOT / "photo_edit_studio" / "assets" / "ui" / "studio.css").read_text(encoding="utf-8")
@@ -777,6 +790,64 @@ def _run_krea_reference(
     return result.images, metadata_text(result), model_manager.status
 
 
+def _run_krea_edit(
+    operation: str,
+    source: Image.Image | None,
+    reference: Image.Image | None,
+    prompt: str,
+    negative_prompt: str,
+    multiplier: int,
+    steps: int,
+    guidance: float,
+    seed: int,
+    restoration: str,
+    restore_weight: float,
+    krea_first_weight: float = 1.0,
+    *extra_lora_inputs: Any,
+    progress: gr.Progress = DEFAULT_PROGRESS,
+) -> tuple[list[Image.Image], str, str]:
+    if operation == "Reference edit":
+        return _run_krea_reference(
+            source, reference, prompt, negative_prompt, multiplier, steps, guidance,
+            seed, restoration, restore_weight, krea_first_weight, *extra_lora_inputs,
+            progress=progress,
+        )
+    if operation != "Composition remix":
+        raise ValueError("Choose a supported Krea edit operation.")
+    if source is None:
+        raise ValueError("Upload an already composed canvas for Krea remix.")
+    request = GenerationRequest(
+        model_key="krea-2-turbo", workflow="krea-remix",
+        images=[source], prompt=prompt.strip() or "remix", negative_prompt="",
+        mask=None, width=1024, height=1024, steps=int(steps), guidance=guidance,
+        true_cfg=0.0, strength=1.0, seed=int(seed), count=1,
+        size_multiplier=1, preserve_identity=False,
+        krea_first_lora_weight=krea_first_weight,
+    )
+    progress(0, desc="Preparing Krea composition remix")
+    result = generate(
+        request, "Off", 0.0,
+        progress=GenerationProgress(lambda fraction, message: progress(fraction, desc=message)),
+    )
+    return result.images, metadata_text(result), model_manager.status
+
+
+def _krea_operation_changed(operation: str) -> tuple[Any, ...]:
+    remix = operation == "Composition remix"
+    return (
+        gr.update(visible=not remix),
+        gr.update(value=9 if remix else 10),
+        gr.update(value=1.0),
+    )
+
+
+def _krea_operation_for_mode(mode: str, operation: str) -> tuple[Any, ...]:
+    if mode == KREA_EDIT_MODE:
+        reference, steps, guidance = _krea_operation_changed(operation)
+        return reference, steps, guidance, gr.update(value=0.0)
+    return tuple(gr.update() for _ in range(4))
+
+
 def build_app() -> gr.Blocks:
     model_choices = _model_choices_for_mode(EDIT_MODE, "qwen-2511-aio")["choices"]
     with gr.Blocks(title="Local Photo Edit Studio") as app:
@@ -849,11 +920,23 @@ def build_app() -> gr.Blocks:
                         swap_body = gr.Image(type="pil", label="Picture 1 · target body / scene", height=300)
                         swap_reference = gr.Image(type="pil", label="Picture 2 · replacement face / person", height=300)
                 with gr.Group(elem_classes=HIDDEN) as krea_edit_group:
+                    krea_operation = gr.Radio(
+                        ["Reference edit", "Composition remix"], value="Reference edit",
+                        label="Krea 2 operation",
+                    )
                     gr.Markdown(
                         "Krea 2 reference editing runs through local ComfyUI. "
                         "Picture 1 sets the scene and output aspect; Picture 2 is optional. "
                         "The identity-edit LoRA stays active; additional Krea LoRAs selected below "
                         "are applied after it. The edit-strength control does not apply here."
+                    )
+                    gr.Markdown(
+                        "**Composition remix (Krea only):** upload an already composed canvas as Picture 1. "
+                        "Use `remix` or describe the realistic result. The required Remix LoRA applies only "
+                        "in the first pass; a base-model pass refines it without upscaling. "
+                        "Defaults: 9 steps, CFG 1. One output, source aspect, maximum side 1024. "
+                        "Picture 2, negative prompt, extra LoRAs, size multiplier, identity preservation "
+                        "and restoration do not apply to Remix. This is an adapted pipeline, not the full supplied workflow."
                     )
                     with gr.Row():
                         krea_source = gr.Image(type="pil", label="Picture 1 · source scene", height=300)
@@ -1040,7 +1123,7 @@ def build_app() -> gr.Blocks:
             aspect_ratio,
         ]
         generate_button.click(
-            lambda *values: _stream_run(_run, *values), inputs=inputs,
+            _stream_click(_run), inputs=inputs,
             outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         swap_inputs = [
@@ -1051,16 +1134,20 @@ def build_app() -> gr.Blocks:
             *lora_names, *lora_weights,
         ]
         swap_button.click(
-            lambda *values: _stream_run(_run_swap, *values), inputs=swap_inputs,
+            _stream_click(_run_swap), inputs=swap_inputs,
             outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         krea_edit_button.click(
-            lambda *values: _stream_run(_run_krea_reference, *values),
-            inputs=[krea_source, krea_reference, prompt, negative_prompt, size_multiplier,
+            _stream_click(_run_krea_edit),
+            inputs=[krea_operation, krea_source, krea_reference, prompt, negative_prompt, size_multiplier,
                     steps, guidance, seed, restoration, restore_weight, krea_first_weight,
                     *lora_names, *lora_weights],
             outputs=[output, metadata, status, progress_card],
             show_progress="hidden",
+        )
+        krea_operation.change(
+            _krea_operation_changed, inputs=krea_operation,
+            outputs=[krea_reference, steps, guidance], show_progress="hidden",
         )
         model_outputs = [
             steps,
@@ -1125,6 +1212,9 @@ def build_app() -> gr.Blocks:
             _turbo_controls_for_model, inputs=[mode, model_key, swap_model],
             outputs=[steps, guidance, true_cfg, negative_prompt],
         ).then(
+            _krea_operation_for_mode, inputs=[mode, krea_operation],
+            outputs=[krea_reference, steps, guidance, true_cfg],
+        ).then(
             _close_popovers, outputs=popover_outputs,
         ).then(
             _model_toolbar_label, inputs=[mode, model_key, swap_model], outputs=model_trigger,
@@ -1156,6 +1246,9 @@ def build_app() -> gr.Blocks:
         ).then(
             _turbo_controls_for_model, inputs=[mode, model_key, swap_model],
             outputs=[steps, guidance, true_cfg, negative_prompt],
+        ).then(
+            _krea_operation_for_mode, inputs=[mode, krea_operation],
+            outputs=[krea_reference, steps, guidance, true_cfg],
         ).then(
             _toolbar_mode_updates, inputs=[mode],
             outputs=[description, swap_trigger, bfs_trigger,

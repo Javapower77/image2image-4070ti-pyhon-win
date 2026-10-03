@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from xml.etree import ElementTree
 
 import pytest
@@ -23,6 +24,7 @@ from photo_edit_studio.ui import (
     _progress_markup,
     _size_preview_for_mode,
     _standard_model_changed,
+    _stream_click,
     _stream_run,
     _toggle_popover,
     _toolbar_mode_updates,
@@ -81,6 +83,7 @@ def test_workflow_icons_and_layout_wired_into_generation() -> None:
         events = [event for event in app.config["dependencies"] if (target, "click") in event["targets"]]
         assert len(events) == 1
         assert len(events[0]["outputs"]) == 4  # gallery, run details, model status, progress
+        assert inspect.isgeneratorfunction(app.fns[events[0]["id"]].fn)
     workflow_state = next(c["id"] for c in components if c["type"] == "state")
     mode_event = next(event for event in app.config["dependencies"] if (workflow_state, "change") in event["targets"])
     assert len(mode_event["outputs"]) == len(set(mode_event["outputs"]))
@@ -233,6 +236,16 @@ def test_every_workflow_has_a_visible_submit_button(mode: str, submit_position: 
         assert "mode-hidden" in changes[5]["elem_classes"]
     else:
         assert "mode-hidden" in changes[9]["elem_classes"]
+
+
+def test_stream_click_is_a_generator_function() -> None:
+    def generate(*_args: object, progress: object) -> tuple[list[str], str, str]:
+        return ["image"], "{}", "Loaded"
+
+    click = _stream_click(generate)
+    assert inspect.isgeneratorfunction(click)
+    events = list(click())
+    assert events[-1][:3] == (["image"], "{}", "Loaded")
 
 
 def test_streamed_progress_and_failure_keep_inference_contract() -> None:
