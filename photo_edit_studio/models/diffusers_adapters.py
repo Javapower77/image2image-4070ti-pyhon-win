@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,8 @@ from photo_edit_studio.models.qwen_aio import (
 from photo_edit_studio.models.registry import MODEL_SPECS
 from photo_edit_studio.progress import GenerationProgress
 from photo_edit_studio.types import GenerationRequest
+
+logger = logging.getLogger(__name__)
 
 IDENTITY_SUFFIX = (
     " Preserve the subject's exact identity, facial geometry, skin texture, pose, body "
@@ -92,6 +95,7 @@ class DiffusersAdapter(ModelAdapter):
         self._validate_hardware()
         diffusers, torch = _runtime()
         pipeline_class = _pipeline_class(diffusers, *self.pipeline_names)
+        logger.info("Diffusers pipeline load begin")
         self.pipe = pipeline_class.from_pretrained(
             _local_path(self.spec.local_path, self.spec.label),
             torch_dtype=torch.bfloat16,
@@ -100,7 +104,10 @@ class DiffusersAdapter(ModelAdapter):
             requires_safety_checker=False,
             safety_checker=None,
         )
+        logger.info("Diffusers pipeline load end")
+        logger.info("Diffusers pipeline offload configuration begin")
         self.configure_memory()
+        logger.info("Diffusers pipeline offload configuration end")
 
     def _validate_hardware(self) -> None:
         if not cuda_available():
@@ -177,27 +184,35 @@ class FluxKleinAdapter(DiffusersAdapter):
         self._validate_hardware()
         diffusers, torch = _runtime()
         try:
-            from transformers import Qwen3ForCausalLM
+            from transformers import Qwen3Config, Qwen3ForCausalLM
         except ImportError as exc:
             raise RuntimeError("The installed Transformers build does not support Qwen3.") from exc
 
         encoder_path = resolve_flux_klein_text_encoder(settings.flux_klein_4b_text_encoder)
+        encoder_config_path = self.spec.local_path / "text_encoder"
+        # Otherwise Transformers attempts to find gguf_file as the configuration
+        # inside text_encoder/. Keep Klein's configuration and external weights separate.
+        encoder_config = Qwen3Config.from_pretrained(
+            str(encoder_config_path.resolve()), local_files_only=True,
+        )
+        logger.info("FLUX text encoder load begin")
         try:
             text_encoder = Qwen3ForCausalLM.from_pretrained(
-                str(self.spec.local_path / "text_encoder"),
+                str(encoder_config_path.resolve()),
+                config=encoder_config,
                 gguf_file=str(encoder_path),
                 dtype=torch.bfloat16,
                 local_files_only=True,
                 low_cpu_mem_usage=True,
-                requires_safety_checker=False,
-                safety_checker=None,                
             )
         except ImportError as exc:
             raise RuntimeError(
                 "Loading the FLUX.2 Klein GGUF text encoder requires the 'gguf' package. "
                 "Rerun scripts/setup.ps1."
             ) from exc
+        logger.info("FLUX text encoder load end")
         pipeline_class = _pipeline_class(diffusers, *self.pipeline_names)
+        logger.info("FLUX pipeline load begin")
         self.pipe = pipeline_class.from_pretrained(
             _local_path(self.spec.local_path, self.spec.label),
             text_encoder=text_encoder,
@@ -207,7 +222,10 @@ class FluxKleinAdapter(DiffusersAdapter):
             requires_safety_checker=False,
             safety_checker=None,
         )
+        logger.info("FLUX pipeline load end")
+        logger.info("FLUX pipeline offload configuration begin")
         self.configure_memory()
+        logger.info("FLUX pipeline offload configuration end")
 
 
 def resolve_flux_klein_text_encoder(configured_path: Path) -> Path:
@@ -219,7 +237,7 @@ def resolve_flux_klein_text_encoder(configured_path: Path) -> Path:
         candidates.append(configured_path.with_name(name.replace("-abl-", "-alb-")))
     for candidate in candidates:
         if candidate.is_file():
-            return candidate
+            return candidate.resolve()
     searched = ", ".join(str(path) for path in candidates)
     raise FileNotFoundError(
         "FLUX.2 Klein 4B custom text encoder was not found. "
@@ -264,12 +282,14 @@ class Krea2Adapter(DiffusersAdapter):
 
 class QwenAioAdapter(QwenAdapter):
     def load(self) -> None:
+        logger.info("Qwen AIO load begin")
         self._validate_hardware()
         diffusers, torch = _runtime()
         base_spec = MODEL_SPECS["qwen-2511"]
         base_path = _local_path(base_spec.local_path, base_spec.label)
         checkpoint = resolve_qwen_aio_checkpoint(self.spec.local_path)
         transformer_class = _pipeline_class(diffusers, "QwenImageTransformer2DModel")
+        logger.info("Qwen AIO official transformer load begin")
         transformer = transformer_class.from_pretrained(
             base_path,
             subfolder="transformer",
@@ -279,11 +299,25 @@ class QwenAioAdapter(QwenAdapter):
             safety_checker=None,
             requires_safety_checker=False,
         )
-        transformer.load_state_dict(
-            transformer_state_from_comfy_aio(checkpoint, torch.bfloat16), strict=False
+        logger.info("Qwen AIO official transformer load end")
+        logger.info("Qwen AIO state preparation begin")
+        state = transformer_state_from_comfy_aio(checkpoint, torch.bfloat16)
+        logger.info("Qwen AIO state preparation end: keys=%d", len(state))
+        logger.info("Qwen AIO state apply begin")
+        incompatible = transformer.load_state_dict(
+            state, strict=False
         )
+        del state
+        logger.info(
+            "Qwen AIO state apply end: missing_keys=%d unexpected_keys=%d",
+            len(incompatible.missing_keys),
+            len(incompatible.unexpected_keys),
+        )
+        logger.info("Qwen AIO rope materialization begin")
         materialize_qwen_rope(transformer)
+        logger.info("Qwen AIO rope materialization end")
         pipeline_class = _pipeline_class(diffusers, *self.pipeline_names)
+        logger.info("Qwen AIO pipeline load begin")
         self.pipe = pipeline_class.from_pretrained(
             base_path,
             transformer=transformer,
@@ -293,4 +327,8 @@ class QwenAioAdapter(QwenAdapter):
             safety_checker=None,
             requires_safety_checker=False
         )
+        logger.info("Qwen AIO pipeline load end")
+        logger.info("Qwen AIO pipeline offload configuration begin")
         self.configure_memory()
+        logger.info("Qwen AIO pipeline offload configuration end")
+        logger.info("Qwen AIO load end")

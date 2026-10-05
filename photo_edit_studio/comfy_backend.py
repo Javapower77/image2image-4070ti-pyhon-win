@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -106,7 +107,10 @@ def ensure_backend(
         f"  loras: {json.dumps(str(settings.lora_dir.resolve()))}\n",
         encoding="utf-8",
     )
-    _log_handle = (settings.output_dir / "comfyui.log").open("ab")
+    log_dir = Path(__file__).resolve().parents[1] / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "comfyui.log"
+    _log_handle = log_path.open("ab")
     args = [
         sys.executable, str(main), "--listen", host, "--port", str(port),
         "--disable-auto-launch", "--disable-api-nodes", "--lowvram",
@@ -121,9 +125,9 @@ def ensure_backend(
             if is_ready():
                 return True
             if _process.poll() is not None:
-                raise RuntimeError(f"Embedded ComfyUI exited during startup. See {settings.output_dir / 'comfyui.log'}.")
+                raise RuntimeError(f"Embedded ComfyUI exited during startup. See {log_path}.")
             time.sleep(1)
-        raise TimeoutError(f"Embedded ComfyUI did not become ready. See {settings.output_dir / 'comfyui.log'}.")
+        raise TimeoutError(f"Embedded ComfyUI did not become ready. See {log_path}.")
     except BaseException:
         stop_backend()
         raise

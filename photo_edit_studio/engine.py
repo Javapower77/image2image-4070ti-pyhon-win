@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import PngImagePlugin
 
 from photo_edit_studio.config import settings
+from photo_edit_studio.dlss import validate_dlss_request
 from photo_edit_studio.image_utils import (
     MAX_OUTPUT_SIDE,
     combine_canvas_size,
@@ -31,6 +32,7 @@ def generate(
     restore_weight: float,
     progress: GenerationProgress | None = None,
 ) -> GenerationResult:
+    dlss = validate_dlss_request(request)
     if progress is not None:
         progress.update(0.01, "Preparing request and sizing images")
     spec = MODEL_SPECS[request.model_key]
@@ -135,7 +137,7 @@ def generate(
     if request.workflow == "krea-remix":
         notes.append(
             f"Krea Ostris remix of one uploaded canvas, capped at 1024: {request.width}×{request.height}. "
-            "Remix LoRA first pass only; mandatory first LoRA on both passes; no upscale."
+            "Remix LoRA first pass only; mandatory first LoRA on both passes; no diffusion upscale."
         )
         notes.append(
             "Refinement re-encodes the same prompt without image references: this removes reference_latents "
@@ -162,15 +164,28 @@ def generate(
             f"Output {request.width}×{request.height} from image-1 aspect ×{request.size_multiplier}."
         )
     if request.mask is not None:
+        # composite_with_mask fits source and mask to generated.size, not the
+        # diffusion canvas; never normalize/downsize enhanced output here.
         images = [composite_with_mask(request.images[0], image, request.mask) for image in images]
         notes.append("Mask composited after generation; white areas contain the edit.")
     if restoration != "Off":
         if progress is not None:
             progress.update(0.91, "Restoring faces")
         release_cuda()
+        enhanced_sizes = [image.size for image in images]
         images = [restore_faces(image, restoration, restore_weight) for image in images]
+        if dlss is not None and [image.size for image in images] != enhanced_sizes:
+            raise RuntimeError("Face restoration changed DLSS output dimensions; refusing silent resizing.")
         notes.append(f"Applied {restoration} post-processing.")
         release_cuda()
+    if dlss is not None:
+        notes.append(
+            f"DLSS 5 enhancement ({dlss['upscaling_mode']}) after diffusion at "
+            f"{request.width}×{request.height}; final sizes: "
+            + ", ".join(f"{image.width}×{image.height}" for image in images)
+            + ". Enhancement scaling is separate from the diffusion VRAM budget; "
+            "upscaling requires additional runtime/GPU memory."
+        )
     if request.loras:
         notes.append(
             "LoRAs: " + ", ".join(f"{spec.name}@{spec.weight:g}" for spec in request.loras)
@@ -224,6 +239,11 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
         "loras": [{"name": spec.name, "weight": spec.weight} for spec in request.loras],
         "prompt_stored": False,
     }
+    if request.dlss is not None and request.dlss["enabled"]:
+        metadata["dlss"] = request.dlss.copy()
+        metadata["diffusion_size"] = [request.width, request.height]
+        metadata["enhanced_output_sizes"] = [list(image.size) for image in result.images]
+        metadata["enhancement_scaling_separate_from_diffusion_budget"] = True
     paths: list[Path] = []
     for index, image in enumerate(result.images, start=1):
         path = run_dir / f"result_{index}.png"

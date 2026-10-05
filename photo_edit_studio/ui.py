@@ -224,12 +224,20 @@ def _stream_run(fn: Any, *args: Any):
         events.put(("progress", (fraction, desc)))
 
     def run() -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
         try:
+            logger.info("Generation worker started: %s", getattr(fn, "__name__", "callback"))
             events.put(("result", fn(*args, progress=notify)))
-        except Exception as exc:  # noqa: BLE001 - forward inference errors to the UI generator
+            logger.info("Generation worker completed")
+        except BaseException as exc:  # forward worker exits instead of leaving progress stuck
+            logger.exception("Generation worker failed")
+            if not isinstance(exc, Exception):
+                exc = RuntimeError(f"Generation worker terminated: {type(exc).__name__}")
             events.put(("error", exc))
 
-    threading.Thread(target=run, daemon=True).start()
+    threading.Thread(target=run, name="studio-generation", daemon=True).start()
     fraction = 0.0
     message = "Preparing generation…"
     yield gr.update(), gr.update(), gr.update(), _progress_markup(message, fraction, 0.0)
@@ -268,6 +276,22 @@ def _stream_click(fn: Any):
     click.__name__ = getattr(fn, "__name__", "click")
     click.__qualname__ = f"_stream_click.{click.__name__}"
     return click
+
+
+def _with_dlss(fn: Any):
+    def run(*values: Any, progress: Any):
+        return fn(*values[:-1], dlss=values[-1], progress=progress)
+    return run
+
+
+def _dlss_controls_changed(*values: Any) -> Any:
+    from photo_edit_studio.dlss import DLSS_DEFAULTS, validate_dlss_settings
+
+    options = dict(zip(DLSS_DEFAULTS, values, strict=True))
+    if not options["enabled"]:
+        return None
+    options["warmup_frames"] = int(options["warmup_frames"])
+    return validate_dlss_settings(options)
 
 
 CSS = (ROOT / "photo_edit_studio" / "assets" / "ui" / "studio.css").read_text(encoding="utf-8")
@@ -597,6 +621,7 @@ def _run(
     krea_first_weight: float = 1.0,
     output_aspect_ratio: str = "1:1",
     progress: gr.Progress = DEFAULT_PROGRESS,
+    dlss: dict[str, Any] | None = None,
 ) -> tuple[list[Image.Image], str, str]:
     progress(0, desc="Starting generation")
     if not prompt.strip():
@@ -648,6 +673,7 @@ def _run(
             else "text" if mode == TEXT_MODE else "standard"
         ),
         krea_first_lora_weight=krea_first_weight,
+        dlss=dlss,
     )
     result = generate(
         request,
@@ -678,6 +704,7 @@ def _run_swap(
     krea_first_weight: float,
     *extra_lora_inputs: Any,
     progress: gr.Progress = DEFAULT_PROGRESS,
+    dlss: dict[str, Any] | None = None,
 ) -> tuple[list[Image.Image], str, str]:
     if body is None or reference is None:
         raise ValueError("Upload both the target body/scene and the replacement face/person.")
@@ -728,6 +755,7 @@ def _run_swap(
         workflow="swap",
         swap_kind=kind,
         krea_first_lora_weight=krea_first_weight,
+        dlss=dlss,
     )
     progress(0, desc="Preparing two-image swap")
     result = generate(
@@ -753,6 +781,7 @@ def _run_krea_reference(
     krea_first_weight: float = 1.0,
     *extra_lora_inputs: Any,
     progress: gr.Progress = DEFAULT_PROGRESS,
+    dlss: dict[str, Any] | None = None,
 ) -> tuple[list[Image.Image], str, str]:
     if source is None:
         raise ValueError("Upload Picture 1 (the source image) for Krea reference editing.")
@@ -779,6 +808,7 @@ def _run_krea_reference(
         ),
         workflow="krea-reference",
         krea_first_lora_weight=krea_first_weight,
+        dlss=dlss,
     )
     progress(0, desc="Preparing Krea reference edit")
     result = generate(
@@ -805,12 +835,13 @@ def _run_krea_edit(
     krea_first_weight: float = 1.0,
     *extra_lora_inputs: Any,
     progress: gr.Progress = DEFAULT_PROGRESS,
+    dlss: dict[str, Any] | None = None,
 ) -> tuple[list[Image.Image], str, str]:
     if operation == "Reference edit":
         return _run_krea_reference(
             source, reference, prompt, negative_prompt, multiplier, steps, guidance,
             seed, restoration, restore_weight, krea_first_weight, *extra_lora_inputs,
-            progress=progress,
+            progress=progress, dlss=dlss,
         )
     if operation != "Composition remix":
         raise ValueError("Choose a supported Krea edit operation.")
@@ -823,6 +854,7 @@ def _run_krea_edit(
         true_cfg=0.0, strength=1.0, seed=int(seed), count=1,
         size_multiplier=1, preserve_identity=False,
         krea_first_lora_weight=krea_first_weight,
+        dlss=dlss,
     )
     progress(0, desc="Preparing Krea composition remix")
     result = generate(
@@ -1039,6 +1071,35 @@ def build_app() -> gr.Blocks:
                         lines=2,
                     )
             with gr.Group(elem_classes="studio-options", elem_id="studio-options"):
+                dlss_state = gr.State(None)
+                with gr.Accordion("DLSS 5 enhancement · ComfyUI only", open=False):
+                    gr.Markdown(
+                        "Optional final enhancement for Qwen 2.1, FireRed and Krea ComfyUI workflows. "
+                        "Disable for Rapid AIO, Qwen 2511 and FLUX. Requires the separately installed "
+                        "DLSS native runtime and a current NVIDIA driver. 1× is recommended on 12 GB; "
+                        "upscaling increases final size and memory use."
+                    )
+                    from photo_edit_studio.dlss import DLSS_CHOICES, DLSS_DEFAULTS
+
+                    dlss_controls = []
+                    for name, default in DLSS_DEFAULTS.items():
+                        label = name.replace("_", " ").capitalize()
+                        if name in DLSS_CHOICES:
+                            control = gr.Dropdown(list(DLSS_CHOICES[name]), value=default, label=label)
+                        elif isinstance(default, bool):
+                            control = gr.Checkbox(value=False if name == "enabled" else default, label=label)
+                        elif name == "warmup_frames":
+                            control = gr.Slider(0, 16, value=default, step=1, label=label)
+                        elif isinstance(default, float):
+                            minimum = -1 if name == "skin_structure_strength" else 0.01 if name == "scene_change_threshold" else 0
+                            maximum = 1 if name == "scene_change_threshold" else 2
+                            control = gr.Slider(minimum, maximum, value=default, step=0.01, label=label)
+                        else:
+                            control = gr.Textbox(value=default, label=label)
+                        dlss_controls.append(control)
+                    for control in dlss_controls:
+                        control.change(_dlss_controls_changed, inputs=dlss_controls, outputs=dlss_state,
+                                       show_progress="hidden")
                 with gr.Accordion("Advanced LoRAs · up to 5", open=False, elem_id="studio-accordion-loras"):
                     krea_first_weight = gr.Slider(
                         0.05, 2.0, value=1.0, step=0.05,
@@ -1123,7 +1184,7 @@ def build_app() -> gr.Blocks:
             aspect_ratio,
         ]
         generate_button.click(
-            _stream_click(_run), inputs=inputs,
+            _stream_click(_with_dlss(_run)), inputs=[*inputs, dlss_state],
             outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         swap_inputs = [
@@ -1134,14 +1195,14 @@ def build_app() -> gr.Blocks:
             *lora_names, *lora_weights,
         ]
         swap_button.click(
-            _stream_click(_run_swap), inputs=swap_inputs,
+            _stream_click(_with_dlss(_run_swap)), inputs=[*swap_inputs, dlss_state],
             outputs=[output, metadata, status, progress_card], show_progress="hidden",
         )
         krea_edit_button.click(
-            _stream_click(_run_krea_edit),
+            _stream_click(_with_dlss(_run_krea_edit)),
             inputs=[krea_operation, krea_source, krea_reference, prompt, negative_prompt, size_multiplier,
                     steps, guidance, seed, restoration, restore_weight, krea_first_weight,
-                    *lora_names, *lora_weights],
+                    *lora_names, *lora_weights, dlss_state],
             outputs=[output, metadata, status, progress_card],
             show_progress="hidden",
         )

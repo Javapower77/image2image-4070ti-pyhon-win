@@ -31,6 +31,12 @@ if (-not (Test-Path (Join-Path $ggufNodes "__init__.py"))) {
     & git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git $ggufNodes
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone ComfyUI-GGUF nodes." }
 }
+$dlssNodes = Join-Path $target "custom_nodes\ComfyUI-DLSS5-Enhancer"
+if (-not (Test-Path (Join-Path $dlssNodes "__init__.py"))) {
+    if (Test-Path $dlssNodes) { throw "DLSS5 node folder exists but is incomplete: $dlssNodes" }
+    & git clone --depth 1 https://github.com/Blueforcer/ComfyUI-DLSS5-Enhancer.git $dlssNodes
+    if ($LASTEXITCODE -ne 0) { throw "Failed to clone DLSS5 nodes." }
+}
 & $python -m pip install -r (Join-Path $target "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "ComfyUI requirements failed to install in the project venv." }
 $ostrisRequirements = Join-Path $ostrisNodes "requirements.txt"
@@ -40,6 +46,12 @@ if (Test-Path $ostrisRequirements) {
 }
 & $python -m pip install -r (Join-Path $ggufNodes "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "ComfyUI-GGUF requirements failed to install in the project venv." }
+& $python -m pip install -r (Join-Path $dlssNodes "requirements.txt")
+if ($LASTEXITCODE -ne 0) { throw "DLSS5 Python requirements failed to install in the project venv." }
+# Do not invoke install_runtime.py or download/run proprietary binaries here.
+Write-Host "Optional DLSS5: Python nodes installed only. Restart ComfyUI to register the V3 nodes."
+Write-Host "Runtime is explicit/manual: review upstream licenses and install_runtime.py instructions yourself."
+Write-Host "Supply DLSS 5 Visual Enhancer v3.0 runtime via runtime_dir (folder containing nvngx.dll), DLSS5_RUNTIME_DIR or pack config.json."
 & $python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable after ComfyUI dependency installation'; print('ComfyUI shares CUDA PyTorch:', torch.__version__)"
 if ($LASTEXITCODE -ne 0) { throw "The shared Python environment lost CUDA support." }
 Write-Host "ComfyUI installed into the project venv at $target."

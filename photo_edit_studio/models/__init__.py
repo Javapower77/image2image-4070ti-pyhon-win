@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from photo_edit_studio.models.base import ModelAdapter
@@ -12,6 +13,8 @@ from photo_edit_studio.models.diffusers_adapters import (
 )
 from photo_edit_studio.models.memory import release_cuda
 from photo_edit_studio.models.registry import MODEL_SPECS
+
+logger = logging.getLogger(__name__)
 
 
 class ModelManager:
@@ -30,7 +33,9 @@ class ModelManager:
             raise KeyError(f"Unknown model: {key}")
         spec = MODEL_SPECS[key]
         if self._key == key and self._adapter is not None:
+            logger.info("Model manager adapter reuse")
             return self._adapter
+        logger.info("Model manager adapter selection begin")
         self.unload()
         adapter_type: type[ModelAdapter]
         if spec.loader == "qwen_aio":
@@ -49,14 +54,17 @@ class ModelManager:
             raise RuntimeError(f"Unsupported model loader: {spec.loader}")
         self._adapter = adapter_type(spec)
         self._key = key
+        logger.info("Model manager adapter selection end: adapter=%s", adapter_type.__name__)
         return self._adapter
 
     def unload(self) -> str:
+        logger.info("Model manager unload begin")
         if self._adapter is not None:
             self._adapter.unload()
         self._adapter = None
         self._key = None
         release_cuda()
+        logger.info("Model manager unload end")
         return "No model loaded; CUDA cache released"
 
 

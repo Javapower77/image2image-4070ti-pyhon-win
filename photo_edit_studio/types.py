@@ -39,6 +39,7 @@ class GenerationRequest:
     workflow: str = "standard"
     swap_kind: str | None = None
     krea_first_lora_weight: float = 1.0
+    dlss: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)

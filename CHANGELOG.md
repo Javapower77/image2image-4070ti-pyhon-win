@@ -6,6 +6,22 @@ All notable changes are grouped by day, newest first. Release versions are retai
 within each day; new entries belong under the date they were made, grouped as
 Added, Changed, Fixed, or Removed as appropriate.
 
+## 2026-10-04
+
+### Added
+
+- Optional DLSS 5 enhancement for existing ComfyUI Qwen 2.1, Krea and FireRed workflows, with disabled-by-default UI controls, upstream parameters, node preflight and enhanced-resolution metadata. Node setup is included; the separately licensed native runtime remains a manual install. See `docs/DLSS.md`.
+- Persistent `logs/` diagnostics: rotating application logs, memory snapshots, model-load stages, Python exception/fault handlers, and per-run Windows console capture with actual Python exit codes. Rapid AIO loading and offload failures now have explicit diagnostic stages.
+
+### Changed
+
+- Project-managed ComfyUI console output now goes to `logs/comfyui.log` rather than `outputs/comfyui.log`.
+
+### Fixed
+
+- FLUX.2 Klein now loads its bundled Qwen3 encoder configuration explicitly and resolves the external GGUF weights to an absolute path, avoiding Transformers searching for the GGUF inside the snapshot's `text_encoder/` folder across all FLUX workflows.
+- Generation worker exits such as `SystemExit` now report a failure rather than leaving progress streaming indefinitely. Windows launch failures now propagate Python's exit status.
+
 ## 2026-10-02
 
 ### Added

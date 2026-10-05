@@ -29,6 +29,10 @@ Only FLUX.2 Klein 4B loads the local Qwen3 GGUF text encoder configured by `PHOT
 
 The GGUF must represent the same Qwen3 4B architecture expected by the downloaded Klein 4B `text_encoder/config.json` (36 layers, hidden size 2560). The pipeline continues to use Klein's bundled tokenizer and uses hidden-state layers 9, 18, and 27. A differently shaped or incompatible GGUF fails during loading instead of silently falling back to the original encoder.
 
+The loader reads Klein's bundled encoder configuration explicitly and passes the external
+GGUF as an absolute local file path. The GGUF does not need to be copied into the snapshot's
+`text_encoder/` folder. This loading path is shared by FLUX text, edit, combine and swap workflows.
+
 On CUDA, Transformers currently dequantizes this Qwen3 GGUF at load time rather than retaining Q4 blocks. Sequential CPU offload still limits GPU residency, but expect higher system-RAM usage than the file size suggests. The `gguf` package is installed as a project dependency.
 
 ## Krea 2 Turbo

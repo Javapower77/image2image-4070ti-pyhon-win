@@ -26,6 +26,7 @@ from photo_edit_studio.comfy_workflows import (
     qwen21_turbo_template,
 )
 from photo_edit_studio.config import settings
+from photo_edit_studio.dlss import add_dlss_nodes, preflight_dlss, validate_dlss_request
 from photo_edit_studio.image_utils import constrain_output_size, normalize_image
 from photo_edit_studio.models.base import ModelAdapter
 from photo_edit_studio.models.diffusers_adapters import FRAMING_SUFFIX
@@ -471,6 +472,7 @@ class ComfyQwen21Adapter(ModelAdapter):
     def generate(
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
+        validate_dlss_request(request)
         if not cuda_available() or cuda_vram_gb() + 0.5 < self.spec.minimum_vram_gb:
             raise RuntimeError("Qwen Image 2.1 Turbo requires a CUDA GPU with about 12 GB VRAM and CPU offload.")
         configure_qwen21_graph(
@@ -494,6 +496,7 @@ class ComfyQwen21Adapter(ModelAdapter):
                 client.get("/system_stats").raise_for_status()
             except httpx.HTTPError as exc:
                 raise RuntimeError(f"Cannot connect to local ComfyUI at {url}.") from exc
+            preflight_dlss(client, request)
             required_nodes = {"TextEncodeQwenImage21", "ViggleTurboLora", "ViggleTurboSigmas"}
             try:
                 available = client.get("/object_info")
@@ -532,6 +535,7 @@ class ComfyQwen21Adapter(ModelAdapter):
                 graph = configure_qwen21_graph(qwen21_turbo_template(), request, tuple(names))
                 resolve_qwen21_lora_names(graph, lora_options)
                 graph["7"]["inputs"]["noise_seed"] = request.seed + index
+                add_dlss_nodes(graph, request)
                 response = client.post("/prompt", json={"prompt": graph})
                 if response.status_code >= 400:
                     raise RuntimeError(f"ComfyUI rejected the Qwen 2.1 Turbo graph: {response.text[:500]}")
@@ -571,6 +575,7 @@ class ComfyFireRedAdapter(ModelAdapter):
     def generate(
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
+        validate_dlss_request(request)
         if not 1 <= len(request.images) <= 3:
             raise ValueError("FireRed requires one to three images.")
         configure_firered_graph(
@@ -591,6 +596,7 @@ class ComfyFireRedAdapter(ModelAdapter):
                 client.get("/system_stats").raise_for_status()
             except httpx.HTTPError as exc:
                 raise RuntimeError(f"Cannot connect to local ComfyUI at {url}.") from exc
+            preflight_dlss(client, request)
             names = []
             from io import BytesIO
 
@@ -607,6 +613,7 @@ class ComfyFireRedAdapter(ModelAdapter):
             for index in range(request.count):
                 graph = configure_firered_graph(firered_edit_template(), request, tuple(names))
                 graph["12"]["inputs"]["seed"] = request.seed + index
+                add_dlss_nodes(graph, request)
                 queued = client.post("/prompt", json={"prompt": graph})
                 if queued.status_code >= 400:
                     raise RuntimeError(
@@ -648,6 +655,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
     def generate(
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
+        validate_dlss_request(request)
         if request.workflow == "krea-remix":
             validate_krea_remix_request(request)
             missing = missing_krea_remix_assets(settings.comfy_dir)
@@ -693,6 +701,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                     f"Cannot connect to local ComfyUI at {url}. Start ComfyUI and follow "
                     "docs/KREA_REFERENCES.md before using Krea reference editing."
                 ) from exc
+            preflight_dlss(client, request)
             if request.workflow == "krea-remix":
                 try:
                     response = client.get("/object_info")
@@ -726,6 +735,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                 payload = configure_krea_reference_graph(graph, request, tuple(names))
             else:
                 payload = configure_krea_graph(graph, request, (names[0], names[1]))
+            add_dlss_nodes(payload, request)
             queued = client.post("/prompt", json={"prompt": payload})
             if queued.status_code >= 400:
                 if request.workflow == "krea-remix":

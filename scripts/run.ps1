@@ -19,4 +19,26 @@ $env:CUDA_MODULE_LOADING = "LAZY"
 $env:GRADIO_ANALYTICS_ENABLED = "False"
 if ($ComfyUI) { $env:PHOTO_EDIT_COMFY_AUTOSTART = "true" }
 
-& $venvPython app.py
+$logDir = Join-Path $PWD "logs"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$consoleLog = Join-Path $logDir ("console-{0}-{1}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $PID)
+$start = Get-Date
+"[$($start.ToString('o'))] Starting studio. Launcher PID=$PID" | Out-File $consoleLog -Encoding utf8
+Write-Host "Diagnostics: $logDir (console: $consoleLog)"
+# Native stderr must be captured rather than turned into terminating PS errors.
+$previousPreference = $ErrorActionPreference
+$nativePreference = $PSNativeCommandUseErrorActionPreference
+try {
+    $ErrorActionPreference = "Continue"
+    $PSNativeCommandUseErrorActionPreference = $false
+    & $venvPython -u -X faulthandler app.py 2>&1 | Tee-Object -FilePath $consoleLog -Append
+    $pythonExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousPreference
+    $PSNativeCommandUseErrorActionPreference = $nativePreference
+}
+if ($null -eq $pythonExit) { $pythonExit = 1 }
+$message = "[$((Get-Date).ToString('o'))] Python exited: code=$pythonExit; elapsed=$((Get-Date) - $start). See studio.log and fault-*.log."
+$message | Tee-Object -FilePath $consoleLog -Append
+if ($pythonExit -ne 0) { Write-Warning "Studio terminated unexpectedly. $message" }
+exit $pythonExit

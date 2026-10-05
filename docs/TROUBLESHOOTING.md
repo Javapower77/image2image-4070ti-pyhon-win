@@ -22,7 +22,36 @@ Open `https://huggingface.co/krea/Krea-2-Turbo`, sign in, accept the Krea 2 Comm
 
 ## Krea reference edit cannot find a workflow or connect to ComfyUI
 
-The **Krea reference edit** workflow uses an optional project-managed ComfyUI backend. Run `.\scripts\setup-comfy.ps1`, download weights with `python scripts/download_models.py --comfy-krea`, and start `.\scripts\run.ps1 -ComfyUI`. The default API graph is bundled; no manual export is required. For startup errors inspect `outputs/comfyui.log` and follow `docs/KREA_REFERENCES.md`. Text-to-image does not require ComfyUI.
+The **Krea reference edit** workflow uses an optional project-managed ComfyUI backend. Run `.\scripts\setup-comfy.ps1`, download weights with `python scripts/download_models.py --comfy-krea`, and start `.\scripts\run.ps1 -ComfyUI`. The default API graph is bundled; no manual export is required. For startup errors inspect `logs/comfyui.log` and follow `docs/KREA_REFERENCES.md`.
+
+## Application disappears or loses its server connection
+
+Restart using the Windows launcher to enable console capture. Diagnostics are stored in:
+
+- `logs/studio.log`: rotating application log (10 MiB, five backups), with timestamps,
+	process/thread IDs, model-load stages, exceptions, RAM availability, process RSS/private
+	memory, and allocated/reserved CUDA memory when CUDA is already initialized.
+- `logs/console-<timestamp>-<launcher-pid>.log`: unbuffered Python stdout/stderr, start/end
+	markers and the actual Python exit code. The launcher propagates nonzero exit codes.
+- `logs/fault-<python-pid>.log`: Python faulthandler stack dumps for supported fatal faults.
+- `logs/comfyui.log`: stdout/stderr from the project-managed ComfyUI subprocess.
+
+Rapid AIO logs bracket the official transformer load, AIO checkpoint extraction/conversion,
+state application, RoPE initialization, remaining pipeline components and memory offload.
+The final stage before termination helps localize the problem. Completing the checkpoint
+shard progress bar does not mean the model is ready: additional CPU allocations and offload
+configuration follow. Large RAM/pagefile pressure is a possibility, not a confirmed diagnosis.
+
+If `Gradio launch returned` and `Python interpreter shutdown` appear, the server exited
+through normal Python shutdown. If they are missing, inspect the launcher exit code and
+fault file. Windows process termination or a system-level resource failure can bypass Python
+handlers entirely; an empty fault file does not rule those out. Check Windows Event Viewer
+Application/System logs for a matching timestamp. Share the final load stages and exit code.
+
+Application logs do not intentionally record prompts, images, credentials or tensor contents.
+Exception tracebacks and raw third-party console output may contain paths or input details;
+review/redact logs before sharing. Console and fault files are per run/process; remove old
+files periodically. Logging does not change the model loading or inference algorithm.
 
 ## Second Krea reference is disconnected
 

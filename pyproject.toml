@@ -18,6 +18,7 @@ dependencies = [
   "opencv-python-headless>=4.10,<5",
   "peft>=0.17,<1",
   "Pillow>=11,<13",
+  "psutil>=5.9,<8",
   "pydantic-settings>=2.7,<3",
   "safetensors>=0.5,<1",
   "sentencepiece>=0.2,<1",

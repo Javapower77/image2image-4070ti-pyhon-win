@@ -173,12 +173,12 @@
         ]
       },
       "widgets_values": [
-        "models\\loras\\Krea2-Remix_Patreon.safetensors",
+        "Krea2-temp\\remix_patreon.safetensors",
         666,
         "remix"
       ],
       "widgets_values_named": {
-        "lora_name": "models\\loras\\Krea2-Remix_Patreon.safetensors",
+        "lora_name": "Krea2-temp\\remix_patreon.safetensors",
         "value": 666,
         "prompt": "remix"
       }
