@@ -6,6 +6,22 @@ All notable changes are grouped by day, newest first. Release versions are retai
 within each day; new entries belong under the date they were made, grouped as
 Added, Changed, Fixed, or Removed as appropriate.
 
+## 2026-10-05
+
+### Changed
+
+- All five optional right-rail LoRA slots now accept finite weights from -2 to 2, including negative contributions; zero skips a slot. Krea reference/remix and both Qwen 2.1 profiles preserve signed adapter ordering, and Diffusers receives signed weights unchanged. Mandatory Krea-first, Remix, Turbo and dedicated BFS weights remain unchanged.
+
+### Fixed
+
+- Both Qwen 2.1 Turbo profiles now honor source-edit/swap ×2 as native diffusion at the previewed dimensions, using a separate configurable 2048-side/4-megapixel budget. Preview and engine sizing agree; other models and reference-conditioning limits remain unchanged.
+- Qwen 2.1 r128 sampler preflight now recognizes ComfyUI V3 `COMBO` options, avoiding a false missing-RES4LYF error when `res_2s_ode` is already registered.
+
+### Added
+
+- Separate selectable **Qwen Image 2.1 + Turbo r128 (Civitai)** profile using exact version 3384956/file 3273779, shared INT8 assets, six manual sigmas, and `res_2s_ode`. Existing Viggle r256 remains unchanged. Missing sampler dependencies fail preflight rather than silently falling back.
+- `qwen-2.1-r128` Windows download preset and validated Civitai download, with secure hidden Hugging Face/Civitai token prompts, environment/cached credentials and noninteractive authentication guidance.
+
 ## 2026-10-04
 
 ### Added
@@ -19,6 +35,7 @@ Added, Changed, Fixed, or Removed as appropriate.
 
 ### Fixed
 
+- Krea Composition remix now applies optional LoRA slots 1–5 after `Krea2_ALWAYS_LOAD_FIRST` and `Krea2-Remix_Patreon`, in slot order at selected weights, for the first pass only. Refinement remains mandatory-first-only; optional selections are validated rather than ignored.
 - FLUX.2 Klein now loads its bundled Qwen3 encoder configuration explicitly and resolves the external GGUF weights to an absolute path, avoiding Transformers searching for the GGUF inside the snapshot's `text_encoder/` folder across all FLUX workflows.
 - Generation worker exits such as `SystemExit` now report a failure rather than leaving progress streaming indefinitely. Windows launch failures now propagate Python's exit status.
 

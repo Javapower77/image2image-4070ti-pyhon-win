@@ -12,7 +12,11 @@ from PIL import Image
 
 from photo_edit_studio.config import ROOT, settings
 from photo_edit_studio.engine import generate, metadata_text
-from photo_edit_studio.image_utils import combine_canvas_size, scaled_output_size
+from photo_edit_studio.image_utils import (
+    combine_canvas_size,
+    diffusion_output_size,
+    scaled_output_size,
+)
 from photo_edit_studio.loras import (
     MAX_LORAS,
     NONE_CHOICE,
@@ -105,7 +109,11 @@ MODEL_ICON_FILES = {
     "firered-1.1": "firered.svg",
     "flux-klein-4b": "flux.svg",
 }
-SWAP_MODEL_KEYS = ("qwen-2511", "flux-klein-4b", "krea-2-turbo", "qwen-2.1-turbo")
+SWAP_MODEL_KEYS = (
+        "qwen-2511", "flux-klein-4b", "krea-2-turbo", "qwen-2.1-turbo",
+        *(key for key, spec in MODEL_SPECS.items()
+            if spec.family == "qwen21" and key != "qwen-2.1-turbo"),
+)
 
 
 def _model_icon_file(key: str) -> str:
@@ -173,13 +181,17 @@ def _size_preview_for_mode(
     source: Image.Image | None, krea_source: Image.Image | None,
     swap_body: Image.Image | None, combine_1: Image.Image | None,
     combine_2: Image.Image | None, combine_3: Image.Image | None,
+    model_key: str | None = None, swap_model_key: str | None = None,
 ) -> str:
+    active_model = swap_model_key if mode == SWAP_MODE else "krea-2-turbo" if mode == KREA_EDIT_MODE else model_key
     if mode in {COMBINE_MODE, TEXT_MODE}:
-        return _canvas_size_preview(mode, resolution, combine_1, combine_2, combine_3, aspect_ratio)
+        return _size_preview(mode, multiplier, resolution, None, combine_1, combine_2, combine_3,
+                             aspect_ratio, active_model)
     active_source = (
         swap_body if mode == SWAP_MODE else krea_source if mode == KREA_EDIT_MODE else source
     )
-    return _size_preview(EDIT_MODE, multiplier, resolution, active_source, None, None, None)
+    return _size_preview(mode, multiplier, resolution, active_source, None, None, None,
+                         aspect_ratio, active_model)
 
 
 PANEL_NAMES = ("settings", "variants", "size", "model", "swap", "bfs")
@@ -397,9 +409,13 @@ def _swap_kind_changed(model_key: str, kind: str) -> str:
 def _swap_model_info(model_key: str, kind: str) -> str:
     profile = swap_profile(model_key, kind)
     spec = MODEL_SPECS[model_key]
-    if model_key == "qwen-2.1-turbo":
+    if spec.family == "qwen21":
+        turbo_label = (
+            "Civitai Turbo r128" if model_key == "qwen-2.1-turbo-r128"
+            else "Viggle Turbo r256"
+        )
         return (
-            f"**{spec.label}** · Viggle Turbo r256 · {kind} BFS LoRA {profile.filename} "
+            f"**{spec.label}** · {turbo_label} · {kind} BFS LoRA {profile.filename} "
             "· body image sets output aspect"
         )
     return f"**{spec.label}** · {profile.filename} · body image sets output aspect"
@@ -464,14 +480,23 @@ def _size_preview(
     combine_2: Image.Image | None,
     combine_3: Image.Image | None,
     aspect_ratio: str = "1:1",
+    model_key: str | None = None,
 ) -> str:
     if mode in {COMBINE_MODE, TEXT_MODE}:
         width, height = combine_canvas_size(str(resolution), str(aspect_ratio))
+        if model_key is not None:
+            width, height = diffusion_output_size((width, height), canvas=True)
         return f"Output **{width} × {height}** · {resolution} · {aspect_ratio} canvas"
     images = _collect_images(mode, source, None, combine_1, combine_2, combine_3)
     if not images:
         return "Upload an image to lock output size to its aspect ratio."
     width, height = scaled_output_size(images[0].size, int(multiplier))
+    if model_key is not None:
+        width, height = diffusion_output_size(
+            (width, height), int(multiplier), family=MODEL_SPECS[model_key].family,
+            workflow="swap" if mode == SWAP_MODE else "krea-reference" if mode == KREA_EDIT_MODE else "standard",
+            pre_sized=True,
+        )
     src_w, src_h = images[0].size
     return (
         f"Output **{width} × {height}** · source {src_w} × {src_h} · "
@@ -567,9 +592,9 @@ def _model_choices_for_mode(mode: str, selected_key: str) -> Any:
 
 
 def _turbo_controls_for_model(mode: str, model_key: str, swap_model_key: str) -> tuple[Any, ...]:
-    """Fix controls that must not depart from Viggle's exact six-step schedule."""
+    """Lock both Qwen 2.1 Turbo profiles to six steps, CFG 1 and no negative."""
     key = swap_model_key if mode == SWAP_MODE else model_key
-    turbo = key == "qwen-2.1-turbo"
+    turbo = MODEL_SPECS[key].family == "qwen21"
     return (
         gr.update(value=6 if turbo else MODEL_SPECS[key].default_steps, interactive=not turbo),
         gr.update(value=1.0 if turbo else MODEL_SPECS[key].default_guidance, interactive=not turbo),
@@ -708,11 +733,15 @@ def _run_swap(
 ) -> tuple[list[Image.Image], str, str]:
     if body is None or reference is None:
         raise ValueError("Upload both the target body/scene and the replacement face/person.")
-    if model_key == "qwen-2.1-turbo" and kind not in {"Head", "Body"}:
+    qwen21 = MODEL_SPECS[model_key].family == "qwen21"
+    if qwen21 and kind not in {"Head", "Body"}:
         raise ValueError("Qwen Image 2.1 Turbo supports Head or Body BFS swaps.")
     profile = swap_profile(model_key, kind)
-    if model_key == "qwen-2.1-turbo" and negative_prompt.strip():
-        raise ValueError("Viggle Turbo requires an empty negative prompt for swap.")
+    if qwen21 and negative_prompt.strip():
+        turbo_label = (
+            "Civitai Turbo r128" if model_key == "qwen-2.1-turbo-r128" else "Viggle Turbo"
+        )
+        raise ValueError(f"{turbo_label} requires an empty negative prompt for swap.")
     if model_key == "krea-2-turbo" and negative_prompt.strip():
         raise ValueError(
             "Krea ComfyUI swap uses the negative prompt in its exported workflow; "
@@ -723,7 +752,7 @@ def _run_swap(
         list(extra_lora_inputs[:MAX_LORAS]),
         list(extra_lora_inputs[MAX_LORAS:]),
     )
-    if model_key == "qwen-2.1-turbo":
+    if qwen21:
         extra = [lora for lora in extra if lora.name.casefold() != profile.filename.casefold()]
         if len(extra) >= MAX_LORAS:
             raise ValueError(
@@ -854,6 +883,10 @@ def _run_krea_edit(
         true_cfg=0.0, strength=1.0, seed=int(seed), count=1,
         size_multiplier=1, preserve_identity=False,
         krea_first_lora_weight=krea_first_weight,
+        loras=selected_loras(
+            "krea-2-turbo", list(extra_lora_inputs[:MAX_LORAS]),
+            list(extra_lora_inputs[MAX_LORAS:]),
+        ),
         dlss=dlss,
     )
     progress(0, desc="Preparing Krea composition remix")
@@ -967,7 +1000,8 @@ def build_app() -> gr.Blocks:
                         "Use `remix` or describe the realistic result. The required Remix LoRA applies only "
                         "in the first pass; a base-model pass refines it without upscaling. "
                         "Defaults: 9 steps, CFG 1. One output, source aspect, maximum side 1024. "
-                        "Picture 2, negative prompt, extra LoRAs, size multiplier, identity preservation "
+                        "Up to five optional Krea LoRAs follow Remix in slot order, at their selected weights, "
+                        "in the first pass only. Picture 2, negative prompt, size multiplier, identity preservation "
                         "and restoration do not apply to Remix. This is an adapted pipeline, not the full supplied workflow."
                     )
                     with gr.Row():
@@ -1128,7 +1162,7 @@ def build_app() -> gr.Blocks:
                             )
                             lora_weights.append(
                                 gr.Slider(
-                                    0,
+                                    -2,
                                     2,
                                     value=1.0,
                                     step=0.05,
@@ -1138,7 +1172,8 @@ def build_app() -> gr.Blocks:
                             )
                     gr.Markdown(
                         "LoRAs stay on disk under `models/loras/<family>/`. "
-                        "Use adapters trained for the selected family; weights of 0 skip a slot. "
+                        "Use adapters trained for the selected family; optional weights range from -2 to 2. "
+                        "Negative weights reverse the adapter contribution; 0 skips a slot. "
                         "Krea reference edit and swap chain selected Krea LoRAs after the required base adapter."
                     )
                 with gr.Accordion("Face restoration", open=False, elem_id="studio-accordion-face"):
@@ -1289,7 +1324,7 @@ def build_app() -> gr.Blocks:
         ).then(
             _size_preview_for_mode,
             inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
-                    krea_source, swap_body, combine_1, combine_2, combine_3],
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
             outputs=size_info,
         )
         mode.change(
@@ -1326,7 +1361,7 @@ def build_app() -> gr.Blocks:
         ).then(
             _size_preview_for_mode,
             inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
-                    krea_source, swap_body, combine_1, combine_2, combine_3],
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
             outputs=size_info,
         )
         swap_model.change(
@@ -1349,6 +1384,11 @@ def build_app() -> gr.Blocks:
             _model_icon_for_mode, inputs=[mode, model_key, swap_model], outputs=model_trigger,
         ).then(
             _model_picker_visibility, inputs=[mode, model_key, swap_model], outputs=picker_outputs,
+        ).then(
+            _size_preview_for_mode,
+            inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
+            outputs=size_info,
         )
         swap_kind.change(
             _swap_kind_changed, inputs=[swap_model, swap_kind], outputs=model_info
@@ -1356,6 +1396,7 @@ def build_app() -> gr.Blocks:
         size_preview_inputs = [
             mode, size_multiplier, output_resolution, aspect_ratio, source,
             krea_source, swap_body, combine_1, combine_2, combine_3,
+            model_key, swap_model,
         ]
         for control in [size_multiplier, source, krea_source, swap_body,
                         output_resolution, combine_1, combine_2, combine_3, aspect_ratio]:

@@ -174,7 +174,9 @@ def test_model_picker_visibility_follows_workflow() -> None:
     swap = _model_picker_visibility(SWAP_MODE, "qwen-2511-aio", "flux-klein-4b")
     krea = _model_picker_visibility(KREA_EDIT_MODE, "qwen-2511-aio", "qwen-2511")
     keys = list(MODEL_SPECS)
-    assert len(edit) == len(keys) + 4
+    from photo_edit_studio.ui import SWAP_MODEL_KEYS
+
+    assert len(edit) == len(keys) + len(SWAP_MODEL_KEYS)
     assert "mode-hidden" not in edit[keys.index("qwen-2511-aio")]["elem_classes"]
     assert edit[keys.index("qwen-2511-aio")]["variant"] == "primary"
     assert "mode-hidden" in edit[keys.index("krea-2-turbo")]["elem_classes"]

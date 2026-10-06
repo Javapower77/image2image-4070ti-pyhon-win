@@ -50,9 +50,9 @@ Describe perspective, time of day, light direction, depth of field, and desired 
 
 ## LoRAs
 
-Upload `.safetensors`, `.pt`, or `.bin` adapters in the **LoRAs** panel for Qwen 2511/Rapid AIO, FLUX.2 Klein 4B or Krea 2. For Qwen Image 2.1 use **only compatible `.safetensors` files**, stored in `models/loras/qwen21/`, and select up to five. The mandatory Viggle Turbo r256 LoRA always loads first; chosen extras follow in slot order at their selected weights. These ComfyUI model-only adapter patches may increase VRAM/RAM and have not been quality-tested together. Do not reuse Qwen 2511 files or select Viggle again. FireRed's automatic Lightning v1.2 LoRA still rejects additional adapters.
+Upload `.safetensors`, `.pt`, or `.bin` adapters in the **LoRAs** panel for Qwen 2511/Rapid AIO, FLUX.2 Klein 4B or Krea 2. For either Qwen Image 2.1 profile use **only compatible `.safetensors` files**, stored in `models/loras/qwen21/`, and select up to five. The profile's mandatory Viggle Turbo r256 or Civitai Turbo r128 LoRA always loads first; chosen extras follow in slot order at their selected weights. These ComfyUI model-only adapter patches may increase VRAM/RAM and have not been quality-tested together. Do not reuse Qwen 2511 files or select either mandatory Turbo again. FireRed's automatic Lightning v1.2 LoRA still rejects additional adapters.
 
-Choose up to five existing files and set each weight (typically 0.6–1.2; 0 skips the slot). LoRAs must match the selected family: a FLUX.2 Klein adapter will not load on Qwen, and a Qwen Image Edit adapter will not load on Klein. Changing the base model reloads that family’s library.
+Choose up to five existing files and set each optional weight from **-2 to 2** (typically 0.6–1.2; 0 skips the slot). Negative weights reverse the adapter contribution and are passed unchanged to ComfyUI or Diffusers; visual quality is model-dependent. Nonfinite and out-of-range weights are rejected. Mandatory Krea-first remains greater than 0 and at most 2; required Remix/Turbo strength stays 1, and the dedicated BFS slider is unchanged. LoRAs must match the selected family: a FLUX.2 Klein adapter will not load on Qwen, and a Qwen Image Edit adapter will not load on Klein. Changing the base model reloads that family’s library.
 
 LoRA names and weights are stored in run metadata. Prompt text is still not stored.
 

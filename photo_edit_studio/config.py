@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     memory_mode: str = "sequential"
     max_output_side: int = 1024
     max_output_pixels: int = 1024 * 1024
+    qwen21_x2_max_output_side: int = 2048
+    qwen21_x2_max_output_pixels: int = 2048 * 2048
     combine_max_output_side: int = 2048
     combine_max_output_pixels: int = 2048 * 2048
     max_batch_count: int = 1

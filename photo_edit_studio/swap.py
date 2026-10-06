@@ -59,6 +59,12 @@ SWAP_PROFILES: dict[tuple[str, str], SwapProfile] = {
     ),
 }
 
+# Both Turbo profiles use the same Qwen 2.1 BFS weights and triggers.
+SWAP_PROFILES.update({
+    ("qwen-2.1-turbo-r128", kind): SWAP_PROFILES[("qwen-2.1-turbo", kind)]
+    for kind in ("Head", "Body")
+})
+
 
 def swap_profile(model_key: str, kind: str) -> SwapProfile:
     try:
@@ -73,7 +79,7 @@ def swap_lora(model_key: str, kind: str, weight: float = 1.0) -> LoraSpec:
     if not path.is_file():
         hint = (
             f"Place the Qwen 2.1 {kind.lower()}-swap LoRA at {path}."
-            if model_key == "qwen-2.1-turbo" else
+            if profile.family == "qwen21" else
             "Run scripts/download_models.py --bfs-swap."
         )
         raise FileNotFoundError(

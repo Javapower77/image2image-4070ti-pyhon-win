@@ -14,6 +14,11 @@ Run `python scripts/check_comfy_krea.py` once a request has started the backend 
 
 ## Controls and constraints
 
+All five optional slots accept finite weights from **-2 to 2**, including negative
+contributions and signed identity-edit base overrides. Zero skips the slot without
+disabling the required base adapter. Mandatory-first and dedicated BFS weights
+retain their separate controls and ranges.
+
 Every Krea workflow requires `vendor/ComfyUI/models/loras/Krea2_ALWAYS_LOAD_FIRST.safetensors`. The app fails before submitting a job if it is missing. In **Advanced · LoRAs**, set its dedicated **Krea2_ALWAYS_LOAD_FIRST · mandatory weight** slider (default 1.0; it cannot be 0). This adapter is inserted directly after the Krea model loader, **before every other LoRA**, including in **Create from text**, **Krea reference edit**, and Krea **Swap head / body**. Other selected Krea LoRAs also work in text mode and follow the mandatory adapter. Do not select this mandatory adapter again as an optional LoRA.
 
 Text creation now uses the project-managed ComfyUI Krea graph so it can guarantee the mandatory adapter runs first; it no longer uses the Diffusers Krea text pipeline. The reference graph wires the source and optional second reference into `Krea2EditGroundedEncode` and `Krea2EditModelPatch`, then loads the identity-edit LoRA at weight 1.0. Selecting that **same** identity-edit file in a UI slot changes its existing weight; it does not load a second copy. Other selected Krea LoRAs are chained **after** it, in slot order, with their chosen weights. Krea head/body swaps instead load the BFS LoRA after the mandatory adapter at the BFS weight shown in the swap panel, followed by other selected Krea LoRAs. The bridge sets prompt, negative prompt, seed, steps, CFG and output resolution from Gradio. The default 1024-side/one-megapixel output budget still applies. The reference LoRA name can be overridden with `PHOTO_EDIT_COMFY_REFERENCE_LORA` if you have another compatible version.

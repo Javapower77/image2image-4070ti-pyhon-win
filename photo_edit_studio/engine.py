@@ -14,7 +14,7 @@ from photo_edit_studio.image_utils import (
     MAX_OUTPUT_SIDE,
     combine_canvas_size,
     composite_with_mask,
-    constrain_output_size,
+    diffusion_output_size,
     normalize_image,
     scaled_output_size,
 )
@@ -96,10 +96,13 @@ def generate(
         input_max_side = max(request.width, request.height)
     requested_size = (request.width, request.height)
     canvas_workflow = request.compose
-    request.width, request.height = constrain_output_size(
+    request.width, request.height = diffusion_output_size(
         requested_size,
-        max_side=(settings.combine_max_output_side if canvas_workflow else settings.max_output_side),
-        max_pixels=(settings.combine_max_output_pixels if canvas_workflow else settings.max_output_pixels),
+        request.size_multiplier,
+        family=spec.family,
+        workflow=request.workflow,
+        canvas=canvas_workflow,
+        pre_sized=True,
     )
     if (request.width, request.height) != requested_size and request.workflow != "krea-remix":
         input_max_side = max(request.width, request.height)
@@ -137,7 +140,7 @@ def generate(
     if request.workflow == "krea-remix":
         notes.append(
             f"Krea Ostris remix of one uploaded canvas, capped at 1024: {request.width}×{request.height}. "
-            "Remix LoRA first pass only; mandatory first LoRA on both passes; no diffusion upscale."
+            "Remix and optional LoRAs first pass only; mandatory first LoRA on both passes; no diffusion upscale."
         )
         notes.append(
             "Refinement re-encodes the same prompt without image references: this removes reference_latents "
@@ -194,10 +197,17 @@ def generate(
         from photo_edit_studio.comfy_assets import FIRERED_LIGHTNING, FIRERED_TRANSFORMER
 
         notes.append(f"GGUF Q4_K_M: {FIRERED_TRANSFORMER}; automatic 8-step LoRA: {FIRERED_LIGHTNING}.")
-    elif request.model_key == "qwen-2.1-turbo":
-        from photo_edit_studio.comfy_assets import QWEN21_TURBO_LORA
+    elif spec.family == "qwen21":
+        from photo_edit_studio.comfy_assets import (
+            QWEN21_R128_KEY,
+            QWEN21_R128_TURBO_LORA,
+            QWEN21_TURBO_LORA,
+        )
 
-        notes.append(f"INT8 Qwen Image 2.1; unmerged Viggle r256 LoRA: {QWEN21_TURBO_LORA}; fixed six-step schedule.")
+        if request.model_key == QWEN21_R128_KEY:
+            notes.append(f"INT8 Qwen Image 2.1; isHeSatoshi Turbo r128 (Civitai compatibility modification by tsolful): {QWEN21_R128_TURBO_LORA}; res_2s_ode, ManualSigmas, six steps, CFG 1; Qwen Research License.")
+        else:
+            notes.append(f"INT8 Qwen Image 2.1; unmerged Viggle r256 LoRA: {QWEN21_TURBO_LORA}; fixed six-step schedule.")
         if request.workflow == "swap":
             notes.append(
                 "Two-image BFS Head swap with Qwen21-BFS_Head_v1.1.safetensors; results may vary."
@@ -221,6 +231,7 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
     run_dir.mkdir(parents=True, exist_ok=False)
     metadata = {
         "model": MODEL_SPECS[request.model_key].repo_id,
+        "model_key": request.model_key,
         "seed": result.seed,
         "width": request.width,
         "height": request.height,
@@ -239,6 +250,28 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
         "loras": [{"name": spec.name, "weight": spec.weight} for spec in request.loras],
         "prompt_stored": False,
     }
+    if MODEL_SPECS[request.model_key].family == "qwen21":
+        from photo_edit_studio.comfy_assets import (
+            QWEN21_R128_FILE_ID,
+            QWEN21_R128_KEY,
+            QWEN21_R128_SOURCE,
+            QWEN21_R128_TURBO_LORA,
+            QWEN21_TURBO_LORA,
+            QWEN21_VIGGLE_REPO,
+        )
+        from photo_edit_studio.comfy_workflows import QWEN21_R128_SIGMAS, QWEN21_TURBO_SIGMAS
+
+        r128 = request.model_key == QWEN21_R128_KEY
+        metadata["mandatory_turbo_lora"] = QWEN21_R128_TURBO_LORA if r128 else QWEN21_TURBO_LORA
+        metadata["mandatory_turbo_weight"] = 1.0
+        metadata["sampler"] = "res_2s_ode" if r128 else "euler"
+        metadata["sigma_node"] = "ManualSigmas" if r128 else "ViggleTurboSigmas"
+        metadata["sigmas"] = QWEN21_R128_SIGMAS if r128 else QWEN21_TURBO_SIGMAS
+        metadata["turbo_source"] = QWEN21_R128_SOURCE if r128 else QWEN21_VIGGLE_REPO
+        if r128:
+            metadata["turbo_file_id"] = QWEN21_R128_FILE_ID
+            metadata["turbo_credit"] = "isHeSatoshi; compatibility modification by tsolful"
+            metadata["license"] = "Qwen Research License Agreement (non-commercial)"
     if request.dlss is not None and request.dlss["enabled"]:
         metadata["dlss"] = request.dlss.copy()
         metadata["diffusion_size"] = [request.width, request.height]
@@ -258,6 +291,7 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
 def metadata_text(result: GenerationResult) -> str:
     payload = {
         "model": MODEL_SPECS[result.model_key].label,
+        "model_key": result.model_key,
         "seed": result.seed,
         "elapsed_seconds": round(result.elapsed_seconds, 2),
         "outputs": [str(path) for path in result.saved_paths],

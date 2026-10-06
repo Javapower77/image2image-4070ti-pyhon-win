@@ -15,10 +15,15 @@ def test_remix_ui_fixes_model_and_ignores_unrelated_controls(monkeypatch):
 
     monkeypatch.setattr(ui, "generate", generate)
     monkeypatch.setattr(ui, "metadata_text", lambda result: "metadata")
+    selections = []
+    selected = [object() for _ in range(5)]
+    monkeypatch.setattr(ui, "selected_loras", lambda model, names, weights:
+                        selections.append((model, names, weights)) or selected)
     source = Image.new("RGB", (400, 600))
     result = ui._run_krea_edit(
         "Composition remix", source, Image.new("RGB", (50, 50)), "", "ignored",
-        2, 9, 1.0, 666, "GFPGAN", 0.5, 0.8, "ignored-lora",
+        2, 9, 1.0, 666, "GFPGAN", 0.5, 0.8,
+        "one", "two", "three", "four", "five", 0.1, 0.2, 0.3, 0.4, 0.5,
         progress=lambda *args, **kwargs: None,
     )
     request, restoration, weight = calls[0]
@@ -28,7 +33,9 @@ def test_remix_ui_fixes_model_and_ignores_unrelated_controls(monkeypatch):
     assert request.prompt == "remix"
     assert request.negative_prompt == ""
     assert request.size_multiplier == request.count == 1
-    assert request.loras == []
+    assert request.loras is selected
+    assert selections == [("krea-2-turbo", ["one", "two", "three", "four", "five"],
+                           [0.1, 0.2, 0.3, 0.4, 0.5])]
     assert request.krea_first_lora_weight == 0.8
     assert (restoration, weight) == ("Off", 0.0)
     assert result[:2] == (["generated"], "metadata")

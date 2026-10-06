@@ -93,8 +93,12 @@ def validate_dlss_request(request: GenerationRequest) -> dict[str, Any] | None:
     request.dlss = validate_dlss_settings(request.dlss)
     if request.dlss is None or not request.dlss["enabled"]:
         return None
+    from photo_edit_studio.models.registry import MODEL_SPECS
+
+    spec = MODEL_SPECS.get(request.model_key)
     supported = (
-        request.model_key == "qwen-2.1-turbo" and request.workflow in {"standard", "text", "swap"}
+        spec is not None and spec.family == "qwen21"
+        and request.workflow in {"standard", "text", "swap"}
         or request.model_key == "firered-1.1" and request.workflow == "standard"
         or request.model_key == "krea-2-turbo"
         and request.workflow in {"standard", "krea-text", "krea-reference", "krea-remix", "swap"}

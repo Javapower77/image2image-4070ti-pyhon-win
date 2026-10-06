@@ -8,9 +8,18 @@ result. Defaults are 9 steps and CFG 1; the seed controls reproducibility.
 Only Krea 2 Turbo is used. Remix returns one generated image, preserves the
 source aspect within model alignment, and caps the longest side at 1024.
 
-Picture 2, negative prompt, optional LoRAs, size multiplier, identity-preservation
+Picture 2, negative prompt, size multiplier, identity-preservation
 prompting and face restoration are ignored for this operation. The mandatory
 `Krea2_ALWAYS_LOAD_FIRST` weight still applies. Ordinary reference edit is unchanged.
+
+Up to five optional Krea-compatible adapters from `models/loras/krea2/` follow
+`Krea2-Remix_Patreon` in slot order, at finite optional weights from **-2 to 2**.
+Negative weights reverse the adapter contribution. Weight-zero slots
+are skipped. The first-pass chain is **mandatory first adapter → Remix → optional
+LoRA 1–5**. The refinement pass keeps only the mandatory first adapter. Do not
+select either mandatory adapter again in an optional slot; duplicate, missing,
+wrong-family and invalid-weight selections are rejected.
+The mandatory first weight remains greater than 0 and at most 2; Remix stays at 1.
 
 ## Required assets
 
@@ -46,6 +55,7 @@ The application deliberately does **not** reproduce the full upstream pipeline:
 2. Apply the mandatory first adapter before the model branches.
 3. Use the Ostris patch with cached reference attention and the Remix adapter
    at weight 1 for Euler / `kl_optimal`, steps 1 through `steps - 1`.
+   Selected optional LoRAs are chained after Remix for this pass only.
 4. Refine with the patched base model, without Remix, using Euler / `simple`
    from `steps - 1` through `steps`.
 5. Decode and return the generated image only. No upscale or DetailDaemon.

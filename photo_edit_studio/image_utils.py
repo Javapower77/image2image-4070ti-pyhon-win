@@ -101,6 +101,33 @@ def scaled_output_size(
     return width, height
 
 
+def diffusion_output_size(
+    size: tuple[int, int],
+    multiplier: int = 1,
+    *,
+    family: str = "",
+    workflow: str = "standard",
+    canvas: bool = False,
+    pre_sized: bool = False,
+) -> tuple[int, int]:
+    """Apply the shared diffusion budget, independently of DLSS enhancement.
+
+    Source sizes are original upload dimensions: scale before normalization.
+    The 2048 ceiling retains the 1024 working-side ×2 sizing semantic.
+    Canvas dimensions are already selected/aligned and must not be multiplied.
+    """
+    from photo_edit_studio.config import settings
+
+    requested = size if canvas or pre_sized else scaled_output_size(size, multiplier)
+    if canvas:
+        max_side, max_pixels = settings.combine_max_output_side, settings.combine_max_output_pixels
+    elif family == "qwen21" and workflow in {"standard", "swap"} and multiplier == 2:
+        max_side, max_pixels = settings.qwen21_x2_max_output_side, settings.qwen21_x2_max_output_pixels
+    else:
+        max_side, max_pixels = settings.max_output_side, settings.max_output_pixels
+    return constrain_output_size(requested, max_side=max_side, max_pixels=max_pixels)
+
+
 def normalize_image(image: Image.Image, max_side: int = 2048) -> Image.Image:
     image = ImageOps.exif_transpose(image).convert("RGB")
     if max(image.size) > max_side:

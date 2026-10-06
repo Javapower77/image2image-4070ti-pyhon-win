@@ -11,6 +11,8 @@ from urllib.parse import urlsplit
 import httpx
 
 from photo_edit_studio.comfy_assets import (
+    QWEN21_R128_KEY,
+    QWEN21_R128_SOURCE,
     missing_assets,
     missing_firered_assets,
     missing_krea_remix_assets,
@@ -84,13 +86,19 @@ def ensure_backend(
     elif model_key == "firered-1.1":
         missing = missing_firered_assets(settings.comfy_dir)
         hint = "firered-1.1"
-    elif model_key == "qwen-2.1-turbo":
-        missing = missing_qwen21_assets(settings.comfy_dir)
-        hint = "qwen-2.1-turbo"
+    elif model_key in {"qwen-2.1-turbo", QWEN21_R128_KEY}:
+        missing = missing_qwen21_assets(settings.comfy_dir, model_key)
+        hint = model_key
     else:
         missing = missing_assets(settings.comfy_dir)
         hint = "--comfy-krea"
     if missing:
+        if model_key == QWEN21_R128_KEY:
+            raise FileNotFoundError(
+                f"{model_key} is missing shared INT8/encoder/VAE or its mandatory r128 LoRA. "
+                f"Place the Civitai compatibility weight in vendor/ComfyUI/models/loras; source: {QWEN21_R128_SOURCE}. "
+                f"Missing: {', '.join(missing)}"
+            )
         raise FileNotFoundError(
             "Embedded ComfyUI is missing model weights or custom nodes. Run "
             "scripts/setup-comfy.ps1 and scripts/download_models.py "

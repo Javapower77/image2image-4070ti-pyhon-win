@@ -8,18 +8,24 @@ def _node(class_type: str, **inputs: Any) -> dict[str, Any]:
 
 
 QWEN21_TURBO_SIGMAS = "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"
+QWEN21_R128_SIGMAS = "1.0,0.9375,0.875,0.75,0.5,0.25,0.0"
 
 
-def qwen21_turbo_template() -> dict[str, dict[str, Any]]:
+def qwen21_turbo_template(model_key: str = "qwen-2.1-turbo") -> dict[str, dict[str, Any]]:
     """Six-step Viggle Qwen-Image-2.1 sampling with unmerged rank-256 LoRA."""
     from photo_edit_studio.comfy_assets import (
         QWEN21_ENCODER,
+        QWEN21_R128_KEY,
+        QWEN21_R128_SAMPLER,
+        QWEN21_R128_TURBO_LORA,
         QWEN21_TRANSFORMER,
         QWEN21_TURBO_LORA,
         QWEN21_VAE,
     )
 
-    return {
+    if model_key not in {"qwen-2.1-turbo", QWEN21_R128_KEY}:
+        raise ValueError(f"Unknown Qwen 2.1 profile: {model_key}")
+    graph = {
         "1": _node("UNETLoader", unet_name=QWEN21_TRANSFORMER, weight_dtype="default"),
         "2": _node("ViggleTurboLora", model=["1", 0], lora_name=QWEN21_TURBO_LORA, strength=1.0),
         "3": _node("CLIPLoader", clip_name=QWEN21_ENCODER, type="qwen_image", device="default"),
@@ -36,6 +42,13 @@ def qwen21_turbo_template() -> dict[str, dict[str, Any]]:
         "12": _node("VAEDecode", samples=["11", 0], vae=["4", 0]),
         "29": _node("SaveImage", images=["12", 0], filename_prefix="photo_edit_qwen21"),
     }
+    if model_key == QWEN21_R128_KEY:
+        graph["2"] = _node("LoraLoaderModelOnly", model=["1", 0],
+                           lora_name=QWEN21_R128_TURBO_LORA, strength_model=1.0)
+        graph["9"] = _node("KSamplerSelect", sampler_name=QWEN21_R128_SAMPLER)
+        graph["10"] = _node("ManualSigmas", sigmas=QWEN21_R128_SIGMAS)
+        graph["29"]["inputs"]["filename_prefix"] = "photo_edit_qwen21_r128"
+    return graph
 
 
 def firered_edit_template() -> dict[str, dict[str, Any]]:

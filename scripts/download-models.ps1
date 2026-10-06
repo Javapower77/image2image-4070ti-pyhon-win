@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "flux-4b", "krea-2", "firered", "all")]
+    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "qwen-2.1-r128", "flux-4b", "krea-2", "firered", "all")]
     [string]$Preset = "recommended",
     [switch]$Restorers,
     [switch]$BfsSwap,
@@ -22,6 +22,7 @@ switch ($Preset) {
     "recommended" { $models = @("qwen-2511", "qwen-2511-aio", "flux-klein-4b") }
     "qwen-aio" { $models = @("qwen-2511", "qwen-2511-aio") }
     "qwen-2.1" { $models = @("qwen-2.1-turbo") }
+    "qwen-2.1-r128" { $models = @("qwen-2.1-turbo-r128") }
     "flux-4b" { $models = @("flux-klein-4b") }
     "krea-2" { $models = @("krea-2-turbo") }
     "firered" { $models = @("firered-1.1") }
@@ -49,6 +50,8 @@ if ($TurboLora) {
 }
 
 Write-Host "Downloading model preset '$Preset'. Downloads can be tens of gigabytes."
+Write-Host "Missing tokens are requested securely by Python in an interactive terminal (blank for public)."
+Write-Host "For automation use HF_TOKEN/cached HF login and CIVITAI_API_TOKEN (or CIVITAI_TOKEN); redirected input never prompts."
 & $venvPython @arguments
 if ($LASTEXITCODE -ne 0) {
     throw "Model download failed with exit code $LASTEXITCODE. See docs\TROUBLESHOOTING.md."

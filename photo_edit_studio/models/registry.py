@@ -85,6 +85,20 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         recommended=False,
         license_note="Qwen Research License: non-commercial; INT8 + unmerged Viggle r256 LoRA",
     ),
+    "qwen-2.1-turbo-r128": ModelSpec(
+        key="qwen-2.1-turbo-r128",
+        label="Qwen Image 2.1 + Turbo r128 (Civitai)",
+        repo_id="Qwen/Qwen-Image-2.1",
+        loader="qwen21_comfy",
+        family="qwen21",
+        default_steps=6,
+        default_guidance=1.0,
+        default_true_cfg=1.0,
+        max_images=3,
+        minimum_vram_gb=12,
+        recommended=False,
+        license_note="Qwen Research License: non-commercial; isHeSatoshi r128, tsolful compatibility modification (Civitai)",
+    ),
     "firered-1.1": ModelSpec(
         key="firered-1.1",
         label="FireRed Image Edit 1.1 (GGUF Q4_K_M + Lightning)",
@@ -115,4 +129,4 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     ),
 }
 
-TEXT_TO_IMAGE_KEYS = ("krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo")
+TEXT_TO_IMAGE_KEYS = ("krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo", "qwen-2.1-turbo-r128")

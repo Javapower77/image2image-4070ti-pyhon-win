@@ -5,14 +5,21 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from photo_edit_studio.comfy_assets import QWEN21_TURBO_LORA
+from photo_edit_studio.comfy_assets import QWEN21_R128_TURBO_LORA, QWEN21_TURBO_LORA
 from photo_edit_studio.config import settings
 from photo_edit_studio.models.registry import MODEL_SPECS
-from photo_edit_studio.types import LoraSpec
+from photo_edit_studio.types import LoraSpec, validate_optional_lora_weight
 
 MAX_LORAS = 5
 NONE_CHOICE = "(none)"
 LORA_SUFFIXES = {".safetensors", ".pt", ".bin"}
+QWEN21_REQUIRED_LORAS = {
+    QWEN21_TURBO_LORA.casefold(), QWEN21_R128_TURBO_LORA.casefold(),
+}
+
+
+def _qwen21_turbo_label(model_key: str) -> str:
+    return "Civitai Turbo r128" if model_key == "qwen-2.1-turbo-r128" else "Viggle Turbo"
 
 
 def family_for(model_key: str) -> str:
@@ -31,12 +38,13 @@ def list_lora_files(model_key: str, root: Path | None = None) -> list[str]:
     if model_key == "firered-1.1":
         return []  # Lightning is loaded automatically.
     directory = library_dir(model_key, root)
-    suffixes = {".safetensors"} if model_key == "qwen-2.1-turbo" else LORA_SUFFIXES
+    qwen21 = family_for(model_key) == "qwen21"
+    suffixes = {".safetensors"} if qwen21 else LORA_SUFFIXES
     names = [
         path.name
         for path in directory.iterdir()
         if path.is_file() and path.suffix.lower() in suffixes
-        and (model_key != "qwen-2.1-turbo" or path.name.casefold() != QWEN21_TURBO_LORA.casefold())
+        and (not qwen21 or path.name.casefold() not in QWEN21_REQUIRED_LORAS)
     ]
     return sorted(names, key=str.lower)
 
@@ -53,8 +61,15 @@ def library_status(model_key: str, saved: list[str] | None = None, root: Path | 
         parts.append("Saved: " + ", ".join(saved) + ".")
     parts.append(
         "Qwen 2511, Qwen 2.1, FLUX.2 Klein, Krea 2 and FireRed have separate libraries. "
-        "FireRed Lightning loads automatically; Qwen 2.1 always loads Viggle Turbo first, then selected Qwen 2.1 adapters."
+        "FireRed Lightning loads automatically."
     )
+    if family == "qwen21":
+        parts.append(
+            f"{MODEL_SPECS[model_key].label} always loads {_qwen21_turbo_label(model_key)} "
+            "first, then selected Qwen 2.1 .safetensors adapters from this shared library. "
+            "Both mandatory Turbo files are excluded from optional slots. "
+            "Head/Body swaps require the matching BFS adapter, plus at most four optional LoRAs."
+        )
     return " ".join(parts)
 
 
@@ -68,10 +83,14 @@ def import_lora_files(
     saved: list[str] = []
     target = library_dir(model_key, root)
     for source in _as_paths(files):
-        if model_key == "qwen-2.1-turbo" and (
-            source.suffix.lower() != ".safetensors" or source.name.casefold() == QWEN21_TURBO_LORA.casefold()
+        if family_for(model_key) == "qwen21" and (
+            source.suffix.lower() != ".safetensors"
+            or source.name.casefold() in QWEN21_REQUIRED_LORAS
         ):
-            raise ValueError("Qwen 2.1 optional LoRAs must be .safetensors and cannot duplicate Viggle Turbo.")
+            raise ValueError(
+                "Qwen 2.1 optional LoRAs must be .safetensors and cannot duplicate "
+                "Viggle Turbo or Civitai Turbo r128."
+            )
         if source.suffix.lower() not in LORA_SUFFIXES:
             raise ValueError(
                 f"Unsupported LoRA file '{source.name}'. Use .safetensors, .pt, or .bin."
@@ -101,12 +120,17 @@ def selected_loras(
         label = (name or NONE_CHOICE).strip()
         if not label or label == NONE_CHOICE or float(weight) == 0:
             continue
+        weight = validate_optional_lora_weight(weight)
         if label in seen:
             continue
-        if model_key == "qwen-2.1-turbo" and (
-            Path(label).suffix.lower() != ".safetensors" or Path(label).name.casefold() == QWEN21_TURBO_LORA.casefold()
+        if family_for(model_key) == "qwen21" and (
+            Path(label).suffix.lower() != ".safetensors"
+            or Path(label).name.casefold() in QWEN21_REQUIRED_LORAS
         ):
-            raise ValueError("Only optional Qwen 2.1 .safetensors LoRAs may follow Viggle Turbo.")
+            raise ValueError(
+                "Only optional Qwen 2.1 .safetensors LoRAs may follow "
+                f"{_qwen21_turbo_label(model_key)}; neither mandatory Turbo file is optional."
+            )
         path = library_dir(model_key, root) / Path(label).name
         if not path.exists():
             raise ValueError(f"LoRA '{label}' is not in the {family_for(model_key)} library.")

@@ -12,7 +12,12 @@ from PIL import Image
 
 from photo_edit_studio.comfy_assets import (
     KREA_FIRST_LORA_FILE,
-    QWEN21_TURBO_LORA,
+    KREA_REMIX_LORA_FILE,
+    QWEN21_MANDATORY_LORAS,
+    QWEN21_R128_KEY,
+    QWEN21_R128_SAMPLER,
+    QWEN21_R128_SAMPLER_EXTENSION,
+    QWEN21_R128_SOURCE,
     missing_firered_assets,
     missing_krea_remix_assets,
     missing_qwen21_assets,
@@ -33,7 +38,7 @@ from photo_edit_studio.models.diffusers_adapters import FRAMING_SUFFIX
 from photo_edit_studio.models.memory import cuda_available, cuda_vram_gb
 from photo_edit_studio.progress import GenerationProgress
 from photo_edit_studio.swap import swap_profile
-from photo_edit_studio.types import GenerationRequest, LoraSpec
+from photo_edit_studio.types import GenerationRequest, LoraSpec, validate_optional_lora_weight
 
 
 def _api_graph(workflow: dict[str, Any]) -> dict[str, Any]:
@@ -86,6 +91,24 @@ def apply_mandatory_krea_lora(
     return graph
 
 
+def _validate_krea_loras(loras: list[LoraSpec]) -> None:
+    """Validate optional Krea adapters without mutating a workflow."""
+    family_dir = (settings.lora_dir / "krea2").resolve()
+    names: set[str] = set()
+    for lora in loras:
+        if lora.name.casefold() == KREA_FIRST_LORA_FILE.casefold():
+            raise ValueError("The mandatory Krea LoRA has its own weight control; do not select it in an optional slot.")
+        path = lora.path.resolve()
+        if path.parent != family_dir or path.name != lora.name or path.suffix.lower() != ".safetensors":
+            raise ValueError("ComfyUI accepts only Krea2 .safetensors adapters in models/loras/krea2/.")
+        if not path.is_file():
+            raise FileNotFoundError(f"Selected Krea LoRA is missing: {path}")
+        if path.name.casefold() in names:
+            raise ValueError(f"Krea LoRA {path.name} is selected more than once.")
+        names.add(path.name.casefold())
+        validate_optional_lora_weight(lora.weight)
+
+
 def apply_krea_loras(
     graph: dict[str, Any], anchor_id: str, loras: list[LoraSpec], *, adjust_base_weight: bool = True
 ) -> dict[str, Any]:
@@ -103,24 +126,13 @@ def apply_krea_loras(
     if not consumers:
         raise ValueError(f"Krea base LoRA node {anchor_id} is not connected to the model.")
     base_name = anchor["inputs"].get("lora_name", "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-    family_dir = (settings.lora_dir / "krea2").resolve()
-    names: set[str] = set()
+    _validate_krea_loras(loras)
     additional: list[LoraSpec] = []
     selected_base_weight: float | None = None
     for lora in loras:
-        if lora.name.casefold() == KREA_FIRST_LORA_FILE.casefold():
-            raise ValueError("The mandatory Krea LoRA has its own weight control; do not select it in an optional slot.")
-        path = lora.path.resolve()
-        if path.parent != family_dir or path.name != lora.name or path.suffix.lower() != ".safetensors":
-            raise ValueError("ComfyUI accepts only Krea2 .safetensors adapters in models/loras/krea2/.")
-        if not path.is_file():
-            raise FileNotFoundError(f"Selected Krea LoRA is missing: {path}")
-        if path.name.casefold() in names:
-            raise ValueError(f"Krea LoRA {path.name} is selected more than once.")
-        names.add(path.name.casefold())
-        if not 0 <= lora.weight <= 2:
-            raise ValueError("Krea LoRA weight must be between 0 and 2.")
-        if path.name.casefold() == base_name.casefold():
+        if lora.weight == 0:
+            continue
+        if lora.name.casefold() == base_name.casefold():
             selected_base_weight = float(lora.weight)
         else:
             additional.append(lora)
@@ -154,8 +166,12 @@ def validate_krea_remix_request(request: GenerationRequest) -> None:
         raise ValueError("Krea remix does not support a mask.")
     if request.count != 1:
         raise ValueError("Krea remix supports a single output only (count=1).")
-    if request.loras:
-        raise ValueError("Krea remix does not support extra LoRAs; Remix is first-pass only.")
+    if len(request.loras) > 5:
+        raise ValueError("Krea remix supports at most 5 optional LoRAs.")
+    for lora in request.loras:
+        if lora.name.casefold() == KREA_REMIX_LORA_FILE.casefold():
+            raise ValueError("The required Remix LoRA cannot be selected in an optional slot.")
+    _validate_krea_loras(request.loras)
     if request.size_multiplier != 1:
         raise ValueError("Krea remix supports size_multiplier=1 only; no upscale.")
     if not isinstance(request.steps, int) or not 3 <= request.steps <= 40:
@@ -192,7 +208,8 @@ def configure_krea_remix_graph(
     graph["53"]["inputs"]["end_at_step"] = request.steps - 1
     graph["54"]["inputs"].update(start_at_step=request.steps - 1, end_at_step=request.steps)
     graph["29"]["inputs"]["filename_prefix"] = f"photo_edit_krea_remix_{uuid.uuid4().hex}"
-    return apply_mandatory_krea_lora(graph, request)
+    apply_mandatory_krea_lora(graph, request)
+    return apply_krea_loras(graph, "71", request.loras, adjust_base_weight=False)
 
 
 def preflight_krea_remix_graph(graph: dict[str, Any], registered: dict[str, Any]) -> None:
@@ -211,6 +228,8 @@ def preflight_krea_remix_graph(graph: dict[str, Any], registered: dict[str, Any]
             if field not in inputs:
                 raise RuntimeError(f"Krea remix node {node['class_type']} lacks input {field}; update nodes and restart ComfyUI.")
             choices = inputs[field][0]
+            if choices == "COMBO" and len(inputs[field]) > 1:
+                choices = inputs[field][1].get("options", [])
             if node["class_type"] == "LoadImage" and field == "image":
                 # Upload occurs AFTER preflight; its new filename is not listed yet.
                 continue
@@ -399,25 +418,39 @@ def configure_qwen21_graph(
     graph: dict[str, Any], request: GenerationRequest, image_names: tuple[str, ...]
 ) -> dict[str, Any]:
     """Connect every uploaded reference to the Qwen2.1 conditioner, with output size from the request."""
-    if request.model_key != "qwen-2.1-turbo" or request.workflow not in {"standard", "text", "swap"}:
+    if request.model_key not in {"qwen-2.1-turbo", QWEN21_R128_KEY} or request.workflow not in {"standard", "text", "swap"}:
         raise ValueError("Qwen Image 2.1 Turbo supports edit, combine, text creation and swap only.")
+    r128 = request.model_key == QWEN21_R128_KEY
+    profile = "Civitai Turbo r128" if r128 else "Viggle Turbo r256"
+    expected = qwen21_turbo_template(request.model_key)
+    for node_id in ("2", "9", "10"):
+        if graph.get(node_id) != expected[node_id]:
+            raise ValueError(f"{profile} requires its profile-specific mandatory LoRA, sampler and sigma nodes.")
     text_only = request.workflow == "text"
     if len(image_names) != len(request.images) or (image_names and text_only) or (not text_only and not 1 <= len(image_names) <= 3):
         raise ValueError("Qwen Image 2.1 Turbo requires 1–3 images for editing, or none for text creation.")
     if request.workflow == "swap" and (len(image_names) != 2 or request.swap_kind not in {"Head", "Body"}):
         raise ValueError("Qwen Image 2.1 swap requires a target and donor image and Head or Body selection.")
+    if r128 and request.workflow == "swap":
+        bfs = swap_profile(request.model_key, request.swap_kind)
+        if not request.loras or request.loras[0].name != bfs.filename or request.loras[0].weight <= 0:
+            raise ValueError(f"{profile} {request.swap_kind} swap requires {bfs.filename} first after Turbo, at a positive weight.")
+        other_bfs = swap_profile(request.model_key, "Body" if request.swap_kind == "Head" else "Head").filename
+        if any(lora.name.casefold() in {bfs.filename.casefold(), other_bfs.casefold()} for lora in request.loras[1:]):
+            raise ValueError(f"{profile} swap requires only the matching BFS adapter, followed by at most four optional LoRAs.")
     if request.steps != 6 or request.true_cfg != 1.0 or request.guidance != 1.0:
-        raise ValueError("Viggle Turbo r256 requires exactly 6 steps, CFG 1 and the fixed six-step sigma schedule.")
+        raise ValueError(f"{profile} requires exactly 6 steps, CFG 1 and the fixed six-step sigma schedule.")
     if request.negative_prompt.strip():
-        raise ValueError("Viggle Turbo uses no negative prompt.")
+        raise ValueError(f"{profile} uses no negative prompt.")
     if request.width % 32 or request.height % 32:
         raise ValueError("Qwen Image 2.1 output dimensions must be divisible by 32.")
     graph["5"]["inputs"]["prompt"] = request.prompt if text_only else request.prompt + FRAMING_SUFFIX
     graph["6"]["inputs"].update(width=request.width, height=request.height)
     graph["7"]["inputs"]["noise_seed"] = request.seed
-    graph["29"]["inputs"]["filename_prefix"] = f"photo_edit_qwen21_{uuid.uuid4().hex}"
+    prefix = "photo_edit_qwen21_r128" if r128 else "photo_edit_qwen21"
+    graph["29"]["inputs"]["filename_prefix"] = f"{prefix}_{uuid.uuid4().hex}"
     if len(request.loras) > 5:
-        raise ValueError("Qwen 2.1 supports at most five optional LoRAs after Viggle Turbo.")
+        raise ValueError(f"Qwen 2.1 supports at most five optional LoRAs after {profile}.")
     lora_dir = (settings.lora_dir / "qwen21").resolve()
     seen: set[str] = set()
     previous = "2"
@@ -425,15 +458,23 @@ def configure_qwen21_graph(
         path = lora.path.resolve()
         if (path.parent != lora_dir or path.name != lora.name
                 or path.suffix.lower() != ".safetensors"
-                or path.name.casefold() == QWEN21_TURBO_LORA.casefold()):
+                or path.name.casefold() in QWEN21_MANDATORY_LORAS):
             raise ValueError("Qwen 2.1 only accepts optional .safetensors LoRAs from models/loras/qwen21/.")
         if not path.is_file():
             raise FileNotFoundError(f"Selected Qwen 2.1 LoRA is missing: {path}")
         if path.name.casefold() in seen:
             raise ValueError(f"Qwen 2.1 LoRA {path.name} was selected more than once.")
         seen.add(path.name.casefold())
-        if not 0 <= lora.weight <= 2:
-            raise ValueError("Qwen 2.1 optional LoRA weight must be between 0 and 2.")
+        # The dedicated BFS entry retains its existing nonnegative range.
+        is_bfs = (request.workflow == "swap" and index == 1
+                  and lora.name == swap_profile(request.model_key, request.swap_kind).filename)
+        if is_bfs:
+            if not 0 <= lora.weight <= 2:
+                raise ValueError("Qwen 2.1 BFS LoRA weight must be between 0 and 2.")
+        else:
+            validate_optional_lora_weight(lora.weight)
+            if lora.weight == 0:
+                continue
         current = str(39 + index)
         graph[current] = {"class_type": "LoraLoaderModelOnly", "inputs": {
             "model": [previous, 0], "lora_name": os.path.join("qwen21", path.name),
@@ -465,6 +506,56 @@ def resolve_qwen21_lora_names(graph: dict[str, Any], choices: list[str]) -> None
         node["inputs"]["lora_name"] = next((name for name in matches if name == requested), matches[0])
 
 
+def preflight_qwen21_r128_graph(graph: dict[str, Any], registered: dict[str, Any]) -> None:
+    """Fail closed on registered nodes, inputs, assets and the exact upstream sampler."""
+    hint = (
+        f"{QWEN21_R128_KEY} requires {QWEN21_R128_SAMPLER} and ManualSigmas. "
+        f"Upstream sampler extension: {QWEN21_R128_SAMPLER_EXTENSION}. "
+        "Review/install compatible dependencies manually and restart ComfyUI; no sampler substitution is supported."
+    )
+    missing = {node["class_type"] for node in graph.values()} - set(registered)
+    if missing:
+        raise RuntimeError(f"{QWEN21_R128_KEY} missing ComfyUI dependency nodes: {', '.join(sorted(missing))}. {hint}")
+    for node in graph.values():
+        class_type = node["class_type"]
+        schema = registered[class_type].get("input", {})
+        inputs = {**schema.get("required", {}), **schema.get("optional", {})}
+        # V3 Qwen conditioning declares image slots through Autogrow, not
+        # necessarily as flattened object_info fields. Expand only declared names.
+        for group, definition in list(inputs.items()):
+            if definition[0] != "COMFY_AUTOGROW_V3":
+                continue
+            template = definition[1].get("template", {})
+            template_fields = template.get("input", {})
+            fields = {**template_fields.get("required", {}), **template_fields.get("optional", {})}
+            if fields:
+                field_definition = next(iter(fields.values()))
+                for name in template.get("names", []):
+                    inputs[f"{group}.{name}"] = field_definition
+        for field, value in node["inputs"].items():
+            if field not in inputs:
+                raise RuntimeError(f"{QWEN21_R128_KEY}: {class_type} lacks input {field}. {hint}")
+            choices = inputs[field][0]
+            if class_type == "LoadImage" and field == "image":
+                continue  # New filenames will be registered only after upload.
+            if isinstance(choices, list) and not isinstance(value, list):
+                matches = [choice for choice in choices if str(choice).replace('\\', '/') == str(value).replace('\\', '/')]
+                if not matches:
+                    raise RuntimeError(
+                        f"{QWEN21_R128_KEY}: {class_type} has not registered {field}={value}; "
+                        f"check profile assets/dependencies. {hint}"
+                    )
+                node["inputs"][field] = matches[0]
+        # A free-string sampler input cannot prove that the sampler is installed.
+        if class_type == "KSamplerSelect":
+            definition = inputs.get("sampler_name", [[]])
+            options = definition[0]
+            if options == "COMBO" and len(definition) > 1:
+                options = definition[1].get("options", [])
+            if not isinstance(options, list) or QWEN21_R128_SAMPLER not in options:
+                raise RuntimeError(f"{QWEN21_R128_KEY}: sampler {QWEN21_R128_SAMPLER} is not registered. {hint}")
+
+
 class ComfyQwen21Adapter(ModelAdapter):
     def load(self) -> None:
         raise RuntimeError("Qwen Image 2.1 Turbo runs through the project-managed ComfyUI API.")
@@ -473,21 +564,31 @@ class ComfyQwen21Adapter(ModelAdapter):
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
         validate_dlss_request(request)
+        if request.model_key != self.spec.key:
+            raise ValueError("Qwen 2.1 adapter profile does not match the requested model key.")
+        r128 = request.model_key == QWEN21_R128_KEY
+        profile = self.spec.label
         if not cuda_available() or cuda_vram_gb() + 0.5 < self.spec.minimum_vram_gb:
             raise RuntimeError("Qwen Image 2.1 Turbo requires a CUDA GPU with about 12 GB VRAM and CPU offload.")
         configure_qwen21_graph(
-            qwen21_turbo_template(), request,
+            qwen21_turbo_template(request.model_key), request,
             tuple(f"image_{i}.png" for i in range(len(request.images))),
         )
-        missing = missing_qwen21_assets(settings.comfy_dir)
+        missing = missing_qwen21_assets(settings.comfy_dir, request.model_key)
         if missing:
+            if r128:
+                raise FileNotFoundError(
+                    f"{request.model_key}: shared INT8 weights/encoder/VAE or mandatory Civitai r128 LoRA missing. "
+                    f"Place the compatibility weight in vendor/ComfyUI/models/loras. Source: {QWEN21_R128_SOURCE}. "
+                    f"Missing: {', '.join(missing)}"
+                )
             raise FileNotFoundError(
                 "Qwen Image 2.1 INT8 weights, Viggle r256 LoRA or custom node missing. "
                 "Run scripts/setup-comfy.ps1 and scripts/download_models.py qwen-2.1-turbo. "
                 f"Missing: {', '.join(missing)}"
             )
         url = _local_comfy_url(settings.comfy_url)
-        ensure_backend(model_key="qwen-2.1-turbo")
+        ensure_backend(model_key=request.model_key)
         results: list[Image.Image] = []
         from io import BytesIO
 
@@ -497,15 +598,16 @@ class ComfyQwen21Adapter(ModelAdapter):
             except httpx.HTTPError as exc:
                 raise RuntimeError(f"Cannot connect to local ComfyUI at {url}.") from exc
             preflight_dlss(client, request)
-            required_nodes = {"TextEncodeQwenImage21", "ViggleTurboLora", "ViggleTurboSigmas"}
+            required_nodes = ({"TextEncodeQwenImage21", "LoraLoaderModelOnly", "ManualSigmas", "KSamplerSelect"}
+                              if r128 else {"TextEncodeQwenImage21", "ViggleTurboLora", "ViggleTurboSigmas"})
             try:
                 available = client.get("/object_info")
                 available.raise_for_status()
                 registered = available.json()
             except (httpx.HTTPError, ValueError) as exc:
-                raise RuntimeError("Cannot verify Qwen 2.1 and Viggle custom nodes in ComfyUI.") from exc
+                raise RuntimeError(f"Cannot verify {profile} dependencies in ComfyUI.") from exc
             missing_nodes = required_nodes - set(registered)
-            if missing_nodes:
+            if missing_nodes and not r128:
                 raise RuntimeError(
                     f"ComfyUI is missing Qwen 2.1/Viggle nodes: {', '.join(sorted(missing_nodes))}. "
                     "Update ComfyUI and restart the project-managed backend."
@@ -516,10 +618,13 @@ class ComfyQwen21Adapter(ModelAdapter):
                 "required", {}
             ).get("lora_name", [[]])[0]
             graph_loras = configure_qwen21_graph(
-                qwen21_turbo_template(), request,
+                qwen21_turbo_template(request.model_key), request,
                 tuple(f"image_{i}.png" for i in range(len(request.images))),
             )
-            resolve_qwen21_lora_names(graph_loras, lora_options)
+            if r128:
+                preflight_qwen21_r128_graph(graph_loras, registered)
+            else:
+                resolve_qwen21_lora_names(graph_loras, lora_options)
             names = []
             for image in request.images:
                 data = BytesIO()
@@ -532,13 +637,16 @@ class ComfyQwen21Adapter(ModelAdapter):
                 response.raise_for_status()
                 names.append(response.json()["name"])
             for index in range(request.count):
-                graph = configure_qwen21_graph(qwen21_turbo_template(), request, tuple(names))
-                resolve_qwen21_lora_names(graph, lora_options)
+                graph = configure_qwen21_graph(qwen21_turbo_template(request.model_key), request, tuple(names))
+                if r128:
+                    preflight_qwen21_r128_graph(graph, registered)
+                else:
+                    resolve_qwen21_lora_names(graph, lora_options)
                 graph["7"]["inputs"]["noise_seed"] = request.seed + index
                 add_dlss_nodes(graph, request)
                 response = client.post("/prompt", json={"prompt": graph})
                 if response.status_code >= 400:
-                    raise RuntimeError(f"ComfyUI rejected the Qwen 2.1 Turbo graph: {response.text[:500]}")
+                    raise RuntimeError(f"ComfyUI rejected {profile} ({request.model_key}) graph: {response.text[:500]}")
                 prompt_id = response.json()["prompt_id"]
                 deadline = time.monotonic() + settings.comfy_timeout_seconds
                 while time.monotonic() < deadline:
@@ -547,7 +655,7 @@ class ComfyQwen21Adapter(ModelAdapter):
                     job = history.json().get(prompt_id)
                     if job:
                         if job.get("status", {}).get("status_str") == "error":
-                            raise RuntimeError(f"Qwen 2.1 Turbo failed in ComfyUI; see {settings.output_dir / 'comfyui.log'}.")
+                            raise RuntimeError(f"{profile} ({request.model_key}) failed in ComfyUI; see {settings.output_dir / 'comfyui.log'}.")
                         images = job.get("outputs", {}).get("29", {}).get("images", [])
                         if images:
                             for item in images:
@@ -561,10 +669,10 @@ class ComfyQwen21Adapter(ModelAdapter):
                                     results.append(image.convert("RGB"))
                             break
                     if progress is not None:
-                        progress.update(None, "Qwen 2.1 Turbo running in low-VRAM ComfyUI · waiting for output")
+                        progress.update(None, f"{profile} running in low-VRAM ComfyUI · waiting for output")
                     time.sleep(1)
                 else:
-                    raise TimeoutError(f"Qwen 2.1 Turbo did not finish within {settings.comfy_timeout_seconds} seconds.")
+                    raise TimeoutError(f"{profile} ({request.model_key}) did not finish within {settings.comfy_timeout_seconds} seconds.")
         return results
 
 

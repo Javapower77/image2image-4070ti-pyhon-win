@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+
+
+def validate_optional_lora_weight(weight: float) -> float:
+    value = float(weight)
+    if not isfinite(value) or not -2 <= value <= 2:
+        raise ValueError("Optional LoRA weight must be finite and between -2 and 2.")
+    return value
 
 
 @dataclass(frozen=True, slots=True)

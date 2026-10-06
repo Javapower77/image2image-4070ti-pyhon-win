@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import getpass
+import hashlib
+import inspect
+import json
+import logging
+import os
+import re
+import sys
+import tempfile
+import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from huggingface_hub import hf_hub_download, snapshot_download
+import httpx
+from huggingface_hub import get_token, hf_hub_download, snapshot_download
+from safetensors import SafetensorError, safe_open
 
 from photo_edit_studio.comfy_assets import (
     COMFY_KREA_FILES,
@@ -37,6 +50,159 @@ QWEN_AIO_REPO = "Phr00t/Qwen-Image-Edit-Rapid-AIO"
 QWEN_AIO_REMOTE_FILE = "v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"
 QWEN_AIO_LOCAL_NAME = "Qwen-Rapid-AIO.safetensors"
 RECOMMENDED_MODELS = ["qwen-2511", "qwen-2511-aio", "flux-klein-4b"]
+QWEN21_R128_KEY = "qwen-2.1-turbo-r128"
+QWEN21_R128_FILENAME = "Qwen-Image-2.1-turbo-v0.2.1-6step-lora-r128.safetensors"
+QWEN21_R128_URL = "https://civitai.red/api/download/models/3384956?fileId=3273779"
+_TOKENS: dict[str, str | None] = {}
+AUTH_HELP = {
+    "HF": "Set HF_TOKEN or sign in with the Hugging Face CLI for gated assets.",
+    "Civitai": "Set CIVITAI_API_TOKEN (or CIVITAI_TOKEN) for authenticated downloads.",
+}
+
+
+def _token(provider: str) -> str | None:
+    if provider in _TOKENS:
+        return _TOKENS[provider]
+    value = (os.environ.get("HF_TOKEN") or get_token()) if provider == "HF" else (
+        os.environ.get("CIVITAI_API_TOKEN") or os.environ.get("CIVITAI_TOKEN")
+    )
+    if not value:
+        if sys.stdin.isatty():
+            try:
+                # Never permit getpass's echoing fallback when no secure terminal exists.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", getpass.GetPassWarning)
+                    value = getpass.getpass(f"{provider} token (hidden; blank for public): ").strip()
+            except (EOFError, getpass.GetPassWarning):
+                raise RuntimeError(f"Secure token prompt unavailable. {AUTH_HELP[provider]}") from None
+        else:
+            print(f"Noninteractive: trying public {provider} downloads. {AUTH_HELP[provider]}")
+    _TOKENS[provider] = value or None
+    return _TOKENS[provider]
+
+
+@contextmanager
+def _quiet_network():
+    # HTTP debug logs and exception URLs can contain bearer tokens or signed queries.
+    previous = logging.root.manager.disable
+    logging.disable(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        logging.disable(previous)
+
+
+def _hf_download(function, **kwargs):
+    token = _token("HF")
+    try:
+        # Keep compatible with injected download callables that expose only the
+        # original repo/filename/local_dir contract. Hub functions support token.
+        parameters = inspect.signature(function).parameters
+        if "token" in parameters or any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+        ):
+            kwargs["token"] = token or False
+        with _quiet_network():
+            return function(**kwargs)
+    except Exception:  # noqa: BLE001 - SDK errors may include credential-bearing URLs
+        raise RuntimeError(f"Hugging Face download failed. {AUTH_HELP['HF']}") from None
+
+
+@contextmanager
+def _civitai_stream(client, url: str, token: str | None, *, query_fallback=False):
+    current = httpx.URL(url)
+    origin = current.copy_with(path="/", query=None)
+    credentials_allowed = True
+    used_query = False
+    for _ in range(10):
+        if current.scheme != "https" or current.userinfo:
+            raise RuntimeError("Unsafe Civitai download redirect rejected.")
+        headers = {"Authorization": f"Bearer {token}"} if token and credentials_allowed else {}
+        with client.stream("GET", current, headers=headers) as response:
+            if (response.status_code in (401, 403) and token and query_fallback
+                    and not used_query and credentials_allowed):
+                current = current.copy_add_param("token", token)
+                used_query = True
+                continue
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise RuntimeError("Civitai redirect has no destination.")
+                current = current.join(location)
+                if current.copy_with(path="/", query=None) != origin:
+                    credentials_allowed = False
+                if not credentials_allowed:
+                    for name in ("token", "access_token", "api_key"):
+                        current = current.copy_remove_param(name)
+                    if token and (token in str(current) or token in str(current.copy_with(query=None))):
+                        raise RuntimeError("Credential-bearing cross-host redirect rejected.")
+                continue
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Civitai request failed (HTTP {response.status_code}). {AUTH_HELP['Civitai']}"
+                )
+            yield response
+            return
+    raise RuntimeError("Too many Civitai download redirects.")
+
+
+def _valid_safetensors(path: Path) -> bool:
+    try:
+        with safe_open(path, framework="pt", device="cpu") as handle:
+            return bool(handle.keys())
+    except (SafetensorError, OSError, ValueError):
+        return False
+
+
+def _download_civitai_r128(destination: Path) -> None:
+    if _valid_safetensors(destination):
+        print(f"Already present: {destination}")
+        return
+    token = _token("Civitai")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with _quiet_network(), httpx.Client(follow_redirects=False, timeout=120) as client:
+            with _civitai_stream(
+                client, "https://civitai.red/api/v1/model-versions/3384956", token
+            ) as response:
+                metadata = response.read()
+                version = json.loads(metadata)
+            if version.get("id") != 3384956:
+                raise RuntimeError("Unexpected Civitai model version.")
+            file = next((item for item in version.get("files", [])
+                         if item.get("id") == 3273779), None)
+            if file is None or file.get("name") != QWEN21_R128_FILENAME:
+                raise RuntimeError("Exact Civitai r128 file is unavailable or has changed.")
+            expected = file.get("hashes", {}).get("SHA256")
+            if expected and not re.fullmatch(r"[0-9a-fA-F]{64}", expected):
+                raise RuntimeError("Invalid Civitai SHA256 metadata.")
+            print(f"Downloading Civitai version 3384956 / file 3273779 -> {destination}")
+            digest = hashlib.sha256()
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent, prefix=destination.name + ".", suffix=".part", delete=False
+            ) as output:
+                temporary = Path(output.name)
+                with _civitai_stream(client, QWEN21_R128_URL, token, query_fallback=True) as response:
+                    for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                        output.write(chunk)
+                        digest.update(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            if expected and digest.hexdigest().casefold() != expected.casefold():
+                raise RuntimeError("Civitai file SHA256 mismatch.")
+            if not _valid_safetensors(temporary):
+                raise RuntimeError("Civitai response is not a valid Safetensors model (possibly HTML).")
+            temporary.replace(destination)
+    except Exception:  # noqa: BLE001 - sanitize all transport/server/validation failures
+        # Do not expose response bodies, URLs, exception chains, or server-controlled text.
+        raise RuntimeError(
+            "Civitai r128 download failed: check connectivity, exact file availability, "
+            f"SHA256 and Safetensors validity. {AUTH_HELP['Civitai']}"
+        ) from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _download_named_file(repo: str, remote: str, destination: Path) -> None:
@@ -45,7 +211,7 @@ def _download_named_file(repo: str, remote: str, destination: Path) -> None:
         return
     destination.parent.mkdir(parents=True, exist_ok=True)
     print(f"Downloading {repo}/{remote} -> {destination}")
-    downloaded = Path(hf_hub_download(repo_id=repo, filename=remote, local_dir=destination.parent))
+    downloaded = Path(_hf_download(hf_hub_download, repo_id=repo, filename=remote, local_dir=destination.parent))
     if downloaded != destination:
         downloaded.replace(destination)
 
@@ -76,6 +242,16 @@ def download_comfy_qwen21() -> None:
     )
 
 
+def download_comfy_qwen21_r128() -> None:
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    target = settings.comfy_dir / "models"
+    for filename in QWEN21_FILES:
+        if Path(filename).name != QWEN21_TURBO_LORA:
+            _download_named_file(QWEN21_COMFY_REPO, filename, target / filename)
+    _download_civitai_r128(target / "loras" / QWEN21_R128_FILENAME)
+
+
 def download_comfy_firered() -> None:
     if not (settings.comfy_dir / "main.py").is_file():
         raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
@@ -98,12 +274,12 @@ def download_comfy_krea() -> None:
             print(f"Already present: {path}")
             continue
         print(f"Downloading {COMFY_KREA_REPO}/{filename} -> {target}")
-        hf_hub_download(repo_id=COMFY_KREA_REPO, filename=filename, local_dir=target)
+        _hf_download(hf_hub_download, repo_id=COMFY_KREA_REPO, filename=filename, local_dir=target)
     adapter = target / "loras" / KREA_EDIT_FILE
     if not adapter.is_file():
         adapter.parent.mkdir(parents=True, exist_ok=True)
         print(f"Downloading {KREA_EDIT_REPO}/{KREA_EDIT_FILE} -> {adapter}")
-        hf_hub_download(repo_id=KREA_EDIT_REPO, filename=KREA_EDIT_FILE, local_dir=adapter.parent)
+        _hf_download(hf_hub_download, repo_id=KREA_EDIT_REPO, filename=KREA_EDIT_FILE, local_dir=adapter.parent)
     _download_named_file(
         KREA_FIRST_LORA_REPO,
         KREA_FIRST_LORA_REMOTE,
@@ -122,7 +298,7 @@ def _download_qwen_aio(local_dir: Path) -> None:
         target.unlink()
     print(f"Downloading {QWEN_AIO_REPO}/{QWEN_AIO_REMOTE_FILE} -> {target}")
     downloaded = Path(
-        hf_hub_download(
+        _hf_download(hf_hub_download,
             repo_id=QWEN_AIO_REPO,
             filename=QWEN_AIO_REMOTE_FILE,
             local_dir=local_dir,
@@ -136,6 +312,7 @@ def _download_qwen_aio(local_dir: Path) -> None:
 
 
 def main() -> None:
+    _TOKENS.clear()
     parser = argparse.ArgumentParser(description="Download model snapshots into the local project.")
     parser.add_argument(
         "models",
@@ -176,7 +353,10 @@ def main() -> None:
             download_comfy_firered()
             continue
         if spec.loader == "qwen21_comfy":
-            download_comfy_qwen21()
+            if key == QWEN21_R128_KEY:
+                download_comfy_qwen21_r128()
+            else:
+                download_comfy_qwen21()
             continue
         if spec.loader == "krea2":
             download_comfy_krea()
@@ -186,14 +366,14 @@ def main() -> None:
             _download_qwen_aio(spec.local_path)
             continue
         print(f"Downloading {spec.repo_id} -> {spec.local_path}")
-        snapshot_download(
+        _hf_download(snapshot_download,
             repo_id=spec.repo_id,
             local_dir=spec.local_path,
             local_dir_use_symlinks=False,
         )
     if args.bfs_swap:
         for (model_key, _kind), profile in SWAP_PROFILES.items():
-            if model_key == "qwen-2.1-turbo":
+            if model_key in {"qwen-2.1-turbo", QWEN21_R128_KEY}:
                 # This separately released file is installed by the user; it is
                 # not part of the legacy BFS repository used below.
                 continue
@@ -203,7 +383,7 @@ def main() -> None:
                 print(f"Already present: {target}")
                 continue
             print(f"Downloading {BFS_REPO}/{profile.filename} -> {target}")
-            hf_hub_download(repo_id=BFS_REPO, filename=profile.filename, local_dir=target.parent)
+            _hf_download(hf_hub_download, repo_id=BFS_REPO, filename=profile.filename, local_dir=target.parent)
     if args.comfy_krea and "krea-2-turbo" not in selected:
         download_comfy_krea()
         download_krea_turbo_lora()
@@ -223,4 +403,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (RuntimeError, KeyboardInterrupt):
+        # Even traceback source/context can reveal credential-bearing request URLs.
+        print("Download failed or cancelled. " + " ".join(AUTH_HELP.values()), file=sys.stderr)
+        sys.exit(1)

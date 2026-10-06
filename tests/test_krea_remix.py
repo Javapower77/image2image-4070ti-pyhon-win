@@ -9,11 +9,14 @@ from PIL import Image
 
 from photo_edit_studio import comfy_backend, engine
 from photo_edit_studio.comfy_assets import (
-    COMFY_KREA_FILES, KREA_FIRST_LORA_FILE, KREA_REMIX_LORA_FILE,
+    COMFY_KREA_FILES,
+    KREA_FIRST_LORA_FILE,
+    KREA_REMIX_LORA_FILE,
     missing_krea_remix_assets,
 )
 from photo_edit_studio.comfy_workflows import krea_remix_template
 from photo_edit_studio.config import settings
+from photo_edit_studio.loras import NONE_CHOICE, selected_loras
 from photo_edit_studio.models import comfy_swap
 from photo_edit_studio.models.registry import MODEL_SPECS
 from photo_edit_studio.types import GenerationRequest, LoraSpec
@@ -31,6 +34,7 @@ def request() -> GenerationRequest:
 @pytest.fixture
 def assets(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "comfy_dir", tmp_path)
+    monkeypatch.setattr(settings, "lora_dir", tmp_path / "models" / "loras")
     for file in (*COMFY_KREA_FILES, f"loras/{KREA_FIRST_LORA_FILE}", f"loras/{KREA_REMIX_LORA_FILE}"):
         path = tmp_path / "models" / file
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -38,16 +42,28 @@ def assets(monkeypatch, tmp_path):
     return tmp_path
 
 
+def optional_loras(assets, weights):
+    family = assets / "models" / "loras" / "krea2"
+    family.mkdir(parents=True, exist_ok=True)
+    result = []
+    for index, weight in enumerate(weights, start=1):
+        path = family / f"slot{index}.safetensors"
+        path.touch()
+        result.append(LoraSpec(path.name, path, weight, f"slot_{index}"))
+    return result
+
+
 def registered(graph):
     result = {}
     for node in graph.values():
         inputs = result.setdefault(node["class_type"], {"input": {"required": {}}})["input"]["required"]
-        for key, value in node["inputs"].items():
+        for key in node["inputs"]:
             inputs[key] = ("ANY",)
     # Exercise real enum registration, including the future upload name exception.
     result["LoadImage"]["input"]["required"]["image"] = (["old.png"],)
     result["LoraLoaderModelOnly"]["input"]["required"]["lora_name"] = (
-        [KREA_FIRST_LORA_FILE, KREA_REMIX_LORA_FILE],
+        [node["inputs"]["lora_name"] for node in graph.values()
+         if node["class_type"] == "LoraLoaderModelOnly"],
     )
     result["KSamplerAdvanced"]["input"]["required"]["scheduler"] = (["simple", "kl_optimal"],)
     return result
@@ -93,6 +109,88 @@ def test_graph_has_source_latent_two_passes_and_exact_adapter_order(assets, step
     comfy_swap.preflight_krea_remix_graph(graph, registered(graph))
 
 
+@pytest.mark.parametrize("weights", [[], [0.7], [-2.0, -0.5, 1.0, 1.25, 2.0]])
+def test_optional_chain_is_ordered_first_pass_only(assets, weights):
+    req = request()
+    req.loras = optional_loras(assets, weights)
+    template = krea_remix_template()
+    remix_weight = template["71"]["inputs"]["strength_model"]
+    refinement = template["80"]
+    graph = comfy_swap.configure_krea_remix_graph(template, req, ("canvas.png",))
+    mandatory = graph["80"]["inputs"]["model"][0]
+    assert graph[mandatory]["inputs"] == {
+        "model": ["55", 0], "lora_name": KREA_FIRST_LORA_FILE, "strength_model": 0.65,
+    }
+    assert graph["71"]["inputs"] == {
+        "model": [mandatory, 0], "lora_name": KREA_REMIX_LORA_FILE,
+        "strength_model": remix_weight,
+    }
+    # Walk backward from the first-pass consumer to prove the exact slot order.
+    current = graph["79"]["inputs"]["model"][0]
+    for lora in reversed(req.loras):
+        node = graph[current]
+        assert node["class_type"] == "LoraLoaderModelOnly"
+        assert node["inputs"]["lora_name"] == lora.name
+        assert node["inputs"]["strength_model"] == lora.weight
+        current = node["inputs"]["model"][0]
+    assert current == "71"
+    assert graph["79"]["inputs"]["kv_cache"] is True
+    assert graph["80"] is refinement
+    assert graph["80"]["inputs"] == {"model": [mandatory, 0], "kv_cache": True}
+    assert graph["54"]["inputs"]["model"] == ["80", 0]
+    assert graph["53"]["inputs"]["model"] == ["79", 0]
+    assert sum(node["class_type"] == "LoraLoaderModelOnly" for node in graph.values()) == 2 + len(weights)
+    comfy_swap.preflight_krea_remix_graph(graph, registered(graph))
+
+
+def test_zero_weight_and_empty_slots_keep_existing_selection_semantics(assets):
+    loras = optional_loras(assets, [0, 0.8, 1.2])
+    req = request()
+    req.loras = selected_loras(
+        req.model_key,
+        [loras[0].name, NONE_CHOICE, loras[1].name, None, loras[2].name],
+        [0, 1, 0.8, 1, 1.2],
+    )
+    assert req.loras == [
+        LoraSpec(loras[1].name, loras[1].path, 0.8, "slot2_3"),
+        LoraSpec(loras[2].name, loras[2].path, 1.2, "slot3_5"),
+    ]
+    graph = comfy_swap.configure_krea_remix_graph(krea_remix_template(), req, ("canvas.png",))
+    assert loras[0].name not in [
+        node["inputs"].get("lora_name") for node in graph.values()
+    ]
+    last = graph["79"]["inputs"]["model"][0]
+    assert graph[last]["inputs"]["lora_name"] == loras[2].name
+    previous = graph[last]["inputs"]["model"][0]
+    assert graph[previous]["inputs"]["lora_name"] == loras[1].name
+    assert graph[previous]["inputs"]["model"] == ["71", 0]
+
+
+def test_dlss_is_after_refinement_and_does_not_change_adapter_chain(assets):
+    from copy import deepcopy
+
+    req = request()
+    req.loras = optional_loras(assets, [0.2, 0.65, 1.0, 1.25, 2.0])
+    req.dlss = {}
+    graph = comfy_swap.configure_krea_remix_graph(krea_remix_template(), req, ("canvas.png",))
+    before = deepcopy(graph)
+    comfy_swap.add_dlss_nodes(graph, req)
+    enhancer = graph["29"]["inputs"]["images"][0]
+    assert graph[enhancer]["class_type"] == "DLSS5EnhanceImages"
+    assert graph[enhancer]["inputs"]["images"] == ["58", 0]
+    assert graph["58"]["inputs"]["samples"] == ["54", 0]
+    assert all(graph[node_id] == node for node_id, node in before.items() if node_id != "29")
+
+
+def test_direct_zero_optional_does_not_change_remix_chain(assets):
+    req = request()
+    req.loras = optional_loras(assets, [0])
+    graph = comfy_swap.configure_krea_remix_graph(krea_remix_template(), req, ("canvas.png",))
+    assert graph["79"]["inputs"]["model"] == ["71", 0]
+    assert graph["71"]["inputs"]["strength_model"] == 1
+    assert sum(node["class_type"] == "LoraLoaderModelOnly" for node in graph.values()) == 2
+
+
 @pytest.mark.parametrize("field,value,match", [
     ("model_key", "flux-klein-4b", "only model"),
     ("images", [], "exactly one"),
@@ -105,7 +203,7 @@ def test_graph_has_source_latent_two_passes_and_exact_adapter_order(assets, step
     ("negative_prompt", "bad", "negative prompt"),
     ("krea_first_lora_weight", 0, "greater than 0"),
     ("krea_first_lora_weight", float("nan"), "greater than 0"),
-    ("loras", [LoraSpec("extra.safetensors", Path("extra.safetensors"), 1, "extra")], "extra LoRAs"),
+    ("loras", [LoraSpec("extra.safetensors", Path("extra.safetensors"), 1, "extra")], "Krea2"),
 ])
 def test_engine_rejects_unsupported_before_loading_or_silently_truncating(monkeypatch, field, value, match):
     req = request()
@@ -114,6 +212,64 @@ def test_engine_rejects_unsupported_before_loading_or_silently_truncating(monkey
     monkeypatch.setattr(engine.model_manager, "unload", lambda: pytest.fail("must not unload"))
     with pytest.raises(ValueError, match=match):
         engine.generate(req, "Off", 0.35)
+
+
+@pytest.mark.parametrize("case,match", [
+    ("too_many", "at most 5"),
+    ("mandatory", "mandatory Krea LoRA"),
+    ("remix", "required Remix LoRA"),
+    ("duplicate", "more than once"),
+    ("wrong_family", "Krea2"),
+    ("wrong_name", "Krea2"),
+    ("wrong_suffix", "Krea2"),
+    ("missing", "Selected Krea LoRA is missing"),
+    ("negative", "between -2 and 2"),
+    ("above_max", "between -2 and 2"),
+    ("nan", "finite"),
+    ("inf", "finite"),
+    ("negative_inf", "finite"),
+])
+def test_invalid_optional_loras_fail_before_loading_or_graph_mutation(monkeypatch, assets, case, match):
+    req = request()
+    req.loras = optional_loras(assets, [0.7])
+    lora = req.loras[0]
+    if case == "too_many":
+        req.loras = optional_loras(assets, [1] * 6)
+    elif case in {"mandatory", "remix"}:
+        name = KREA_FIRST_LORA_FILE if case == "mandatory" else KREA_REMIX_LORA_FILE
+        # Case-insensitive reserved-name checks must precede path validation.
+        req.loras = [LoraSpec(name.upper(), lora.path.parent / name.upper(), 0.3, "reserved")]
+    elif case == "duplicate":
+        req.loras.append(LoraSpec(lora.name, lora.path, 1.2, "duplicate"))
+    elif case == "wrong_family":
+        path = assets / "models" / "loras" / "flux" / lora.name
+        path.parent.mkdir()
+        path.touch()
+        req.loras = [LoraSpec(path.name, path, 1, "foreign")]
+    elif case == "wrong_name":
+        req.loras = [LoraSpec("other.safetensors", lora.path, 1, "mismatch")]
+    elif case == "wrong_suffix":
+        path = lora.path.with_suffix(".pt")
+        path.touch()
+        req.loras = [LoraSpec(path.name, path, 1, "suffix")]
+    elif case == "missing":
+        lora.path.unlink()
+    else:
+        weight = {"negative": -2.1, "above_max": 2.1, "nan": float("nan"),
+                  "inf": float("inf"), "negative_inf": float("-inf")}[case]
+        req.loras = [LoraSpec(lora.name, lora.path, weight, lora.adapter_name)]
+    monkeypatch.setattr(engine.model_manager, "get", lambda *args: pytest.fail("must not load"))
+    monkeypatch.setattr(engine.model_manager, "unload", lambda: pytest.fail("must not unload"))
+    error = FileNotFoundError if case == "missing" else ValueError
+    with pytest.raises(error, match=match):
+        engine.generate(req, "Off", 0.35)
+    graph = krea_remix_template()
+    original_ids = set(graph)
+    original_remix = graph["71"]["inputs"].copy()
+    with pytest.raises(error, match=match):
+        comfy_swap.configure_krea_remix_graph(graph, req, ("canvas.png",))
+    assert set(graph) == original_ids
+    assert graph["71"]["inputs"] == original_remix
 
 
 def test_engine_routes_remix_not_text_and_preserves_upload(monkeypatch, tmp_path):
@@ -206,6 +362,7 @@ def test_preflight_checks_kv_cache_and_scheduler(assets):
 
 def test_adapter_preflights_before_upload_and_returns_only_save29(monkeypatch, assets):
     req = request()
+    req.loras = optional_loras(assets, [0.4, 1.2])
     graph = comfy_swap.configure_krea_remix_graph(krea_remix_template(), req, ("source.png",))
     calls = []
     started = []
@@ -226,6 +383,11 @@ def test_adapter_preflights_before_upload_and_returns_only_save29(monkeypatch, a
             payload = json.loads(http_request.content)["prompt"]
             assert payload["72"]["inputs"]["image"] == "uploaded.png"
             assert payload["84"]["class_type"] == "TextEncodeKrea2OstrisEdit"
+            assert payload["79"] == graph["79"]
+            assert payload["80"] == graph["80"]
+            for node_id, node in graph.items():
+                if node["class_type"] == "LoraLoaderModelOnly":
+                    assert payload[node_id] == node
             return httpx.Response(200, json={"prompt_id": "job"})
         if path == "/history/job":
             return httpx.Response(200, json={"job": {"outputs": {
