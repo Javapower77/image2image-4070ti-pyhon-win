@@ -2,7 +2,7 @@
 
 | UI model | Default steps | 12 GB status | Notes |
 | --- | ---: | --- | --- |
-| Krea 2 Turbo | 8 | Supported with offload | Gated 12B text-to-image model; CFG 0; Krea 2 Community License. |
+| Krea 2 Turbo | 8 | Supported with offload | Gated 12B text-to-image model; ComfyUI CFG 1; Krea 2 Community License. |
 | Qwen Rapid AIO | 4 | Recommended | Best first choice for Qwen edits; requires official Qwen 2511 components. |
 | FLUX.2 Klein 4B | 4 | Recommended | Fast distilled option; use 1K output and one image. |
 | Qwen Image Edit 2511 | 40 | Advanced | Runs through sequential CPU offload and is substantially slower. |
@@ -81,6 +81,10 @@ GGUF as an absolute local file path. The GGUF does not need to be copied into th
 On CUDA, Transformers currently dequantizes this Qwen3 GGUF at load time rather than retaining Q4 blocks. Sequential CPU offload still limits GPU residency, but expect higher system-RAM usage than the file size suggests. The `gguf` package is installed as a project dependency.
 
 ## Krea 2 Turbo
+
+See [Krea workflow filenames and hardware assessment](KREA_MODELS.md) for the exact
+installed transformer, encoder, VAE and adapter chains for text, reference edit,
+Remix and head/body swaps, including effective-default caveats.
 
 `krea/Krea-2-Turbo` is a gated 12-billion-parameter text-to-image model. Accept the Krea 2 Community License on Hugging Face and authenticate with `hf auth login` when needed. All Krea 2 modes, including **Create from text**, run through the project's optional ComfyUI backend so `Krea2_ALWAYS_LOAD_FIRST.safetensors` is always applied first. Install the ComfyUI-format Krea weights, mandatory TextFusion adapter, and optional official Krea Turbo LoRA with `.\scripts\download-models.ps1 -Preset krea-2`. The optional Turbo LoRA is placed in `models/loras/krea2/`; select it explicitly in the UI if wanted. See `docs/KREA_REFERENCES.md`.
 

@@ -40,3 +40,22 @@ Download compatible BFS LoRAs with `python scripts/download_models.py --bfs-swap
 ## Optional Krea reference editing
 
 The Krea 2 Diffusers model cannot accept reference images. For a source image plus optional second reference use **Krea reference edit** and the optional project-managed ComfyUI Krea2Edit backend described in `docs/KREA_REFERENCES.md`.
+
+## Optional Krea All2Real assets
+
+After `.\scripts\setup-comfy.ps1`, explicitly run
+`.\scripts\download-models.ps1 -Preset krea-originals`, or, in the activated
+environment, `python scripts/download_models.py --comfy-krea-originals`.
+Used alone, this downloads only three pinned assets (~13.06 GiB): the approved
+current Comfy-Org INT8 Turbo alias, exact spacepxl Wan upscale VAE, and exact skin
+filename from the timothy692 mirror (same SHA256 as gemasai). MoreReal, the shared
+encoder and mandatory first adapter are **not included**; supply them separately.
+
+**Changed decision:** the historical suffixed transformer was not found; the user
+approved the current checkpoint saved as `krea2_turbo_int8_convrot-b19a4f0be264.safetensors`.
+This is not proof of identical upstream-original bytes or visual parity. Runtime
+still never downloads or silently substitutes/falls back. Staged files are checked
+for size/SHA256 and Safetensors headers; existing mismatches cause an error and
+remain unchanged. The downloader never pickle-loads the skin `.pth`; its license
+metadata is unavailable, so review source terms/provenance before use. Allow extra
+staging/cache space. See [All2Real asset pins and limits](KREA_ALL2REAL.md).

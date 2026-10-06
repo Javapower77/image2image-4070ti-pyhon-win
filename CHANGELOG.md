@@ -6,6 +6,25 @@ All notable changes are grouped by day, newest first. Release versions are retai
 within each day; new entries belong under the date they were made, grouped as
 Added, Changed, Fixed, or Removed as appropriate.
 
+## 2026-10-06
+
+### Added
+
+- Explicit Python `--comfy-krea-originals` and PowerShell `krea-originals` preset for only three revision/size/SHA256-pinned assets (~13.06 GiB): INT8 Turbo alias, exact spacepxl Wan upscale VAE and exact skin filename from the timothy692 mirror (same SHA256 as gemasai). Excludes MoreReal, shared encoder and mandatory first adapter. Staged downloads validate size/hash and Safetensors headers; existing mismatches remain unchanged with an error. Skin license metadata is unavailable; review provenance/terms. Downloader never pickle-loads the `.pth`; runtime never downloads. No actual downloads performed for this documentation update.
+- All2Real regression tests and `docs/KREA_ALL2REAL.md` covering required loader filenames and user-supplied prerequisites, shared two-pass adapters, seeded noise, pre-upload validation, UI/engine routing and four-tile skin detail. Documented native Wan upscale/memory uncertainty and unverified NO8D/WAS/VAEUtils parity; no live inference or downloads performed.
+- Krea workflow asset inventory in `docs/KREA_MODELS.md`, with verified installed filenames/file sizes, mandatory and optional adapter chains, RTX 4070 Ti 12 GB hardware trade-offs, workflow overrides and the existing CFG-default inconsistency. No inference settings changed.
+
+### Changed
+
+- User-approved All2Real transformer substitution supersedes the original-exact decision: the historical suffixed checkpoint was not found. The explicit downloader pins current `Comfy-Org/Krea-2` remote `diffusion_models/krea2_turbo_int8_convrot.safetensors` at revision `6b1d7191d84d5ded74d83a1a98211dad0ac8ae25`, SHA256 `8e4eeda70dd5037ab1ba2bef6b417f9f901e26093117cf397f741fc1fdaaf3f1`, saving alias `krea2_turbo_int8_convrot-b19a4f0be264.safetensors`. This is NOT proof of identical upstream-original bytes; runtime still has no silent fallback. Updated All2Real/model/setup/Windows documentation with explicit usage and verification/provenance limits only; no implementation edits in this documentation pass.
+
+### Fixed
+
+- All2Real now pixel-shuffles the Wan VAE's 12 packed decoder channels into RGB after both decodes. Fixes the skin-detail RGB channel error and the intermediate re-encode silently discarding channels; tiled fallback allocates all 12 channels. Added exact channel-layout regression tests. Preserving original scaling enlarges the second pass and final output; runtime memory remains unbenchmarked.
+
+- Krea UI defaults now use ComfyUI CFG 1 instead of the historical Diffusers-style 0, which discarded the positive prompt in standard KSampler guidance. Text generation rejects zero, negative and nonfinite CFG values with an explanatory error; positive fractional settings remain supported. Added prompt-routing and UI-default regression tests.
+- Krea reference edit now also rejects nonpositive/nonfinite CFG. Added HTTP-boundary regression coverage confirming prompts, negative conditioning, dimensions, steps, seed, CFG and signed optional LoRA weights reach the active saved-output graph. Documented the existing reference-attention boost without changing its behavior.
+
 ## 2026-10-05
 
 ### Changed

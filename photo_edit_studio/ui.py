@@ -182,6 +182,7 @@ def _size_preview_for_mode(
     swap_body: Image.Image | None, combine_1: Image.Image | None,
     combine_2: Image.Image | None, combine_3: Image.Image | None,
     model_key: str | None = None, swap_model_key: str | None = None,
+    krea_operation: str = "Reference edit",
 ) -> str:
     active_model = swap_model_key if mode == SWAP_MODE else "krea-2-turbo" if mode == KREA_EDIT_MODE else model_key
     if mode in {COMBINE_MODE, TEXT_MODE}:
@@ -190,6 +191,12 @@ def _size_preview_for_mode(
     active_source = (
         swap_body if mode == SWAP_MODE else krea_source if mode == KREA_EDIT_MODE else source
     )
+    if mode == KREA_EDIT_MODE and krea_operation == "All2Real":
+        return (
+            "All2Real: source capped at 1024, then 1MP/Flux bucket preprocessing. "
+            "Original Wan VAE decode may upscale; final dimensions are reported after generation. "
+            "Size multiplier does not apply."
+        )
     return _size_preview(mode, multiplier, resolution, active_source, None, None, None,
                          aspect_ratio, active_model)
 
@@ -872,13 +879,14 @@ def _run_krea_edit(
             seed, restoration, restore_weight, krea_first_weight, *extra_lora_inputs,
             progress=progress, dlss=dlss,
         )
-    if operation != "Composition remix":
+    if operation not in {"Composition remix", "All2Real"}:
         raise ValueError("Choose a supported Krea edit operation.")
     if source is None:
-        raise ValueError("Upload an already composed canvas for Krea remix.")
+        raise ValueError(f"Upload Picture 1 for Krea {operation}.")
+    all2real = operation == "All2Real"
     request = GenerationRequest(
-        model_key="krea-2-turbo", workflow="krea-remix",
-        images=[source], prompt=prompt.strip() or "remix", negative_prompt="",
+        model_key="krea-2-turbo", workflow="krea-all2real" if all2real else "krea-remix",
+        images=[source], prompt=prompt.strip() or ("photorealistic" if all2real else "remix"), negative_prompt="",
         mask=None, width=1024, height=1024, steps=int(steps), guidance=guidance,
         true_cfg=0.0, strength=1.0, seed=int(seed), count=1,
         size_multiplier=1, preserve_identity=False,
@@ -889,7 +897,7 @@ def _run_krea_edit(
         ),
         dlss=dlss,
     )
-    progress(0, desc="Preparing Krea composition remix")
+    progress(0, desc=f"Preparing Krea {operation}")
     result = generate(
         request, "Off", 0.0,
         progress=GenerationProgress(lambda fraction, message: progress(fraction, desc=message)),
@@ -898,10 +906,10 @@ def _run_krea_edit(
 
 
 def _krea_operation_changed(operation: str) -> tuple[Any, ...]:
-    remix = operation == "Composition remix"
+    remix = operation in {"Composition remix", "All2Real"}
     return (
         gr.update(visible=not remix),
-        gr.update(value=9 if remix else 10),
+        gr.update(value=11 if operation == "All2Real" else 9 if remix else 10),
         gr.update(value=1.0),
     )
 
@@ -986,7 +994,7 @@ def build_app() -> gr.Blocks:
                         swap_reference = gr.Image(type="pil", label="Picture 2 · replacement face / person", height=300)
                 with gr.Group(elem_classes=HIDDEN) as krea_edit_group:
                     krea_operation = gr.Radio(
-                        ["Reference edit", "Composition remix"], value="Reference edit",
+                        ["Reference edit", "Composition remix", "All2Real"], value="Reference edit",
                         label="Krea 2 operation",
                     )
                     gr.Markdown(
@@ -1003,6 +1011,16 @@ def build_app() -> gr.Blocks:
                         "Up to five optional Krea LoRAs follow Remix in slot order, at their selected weights, "
                         "in the first pass only. Picture 2, negative prompt, size multiplier, identity preservation "
                         "and restoration do not apply to Remix. This is an adapted pipeline, not the full supplied workflow."
+                    )
+                    gr.Markdown(
+                        "**All2Real:** one source image, two `er_sde` passes, MoreReal at 0.9 "
+                        "on both passes, latent noise and final skin-detail enhancement. "
+                        "Defaults: 11 total schedule steps, CFG 1. Select MoreReal in an optional "
+                        "slot to adjust its existing weight; other Krea LoRAs follow it on both passes. "
+                        "Requires the original INT8 transformer, Wan upscale VAE and skin-detail model "
+                        "from `workflows/Krea2-all2real.json`; no automatic downloads or substitutions. "
+                        "Picture 2, negative prompt, size multiplier and restoration do not apply. "
+                        "The Wan VAE can enlarge the decoded result; this is not native ×2 diffusion."
                     )
                     with gr.Row():
                         krea_source = gr.Image(type="pil", label="Picture 1 · source scene", height=300)
@@ -1324,7 +1342,7 @@ def build_app() -> gr.Blocks:
         ).then(
             _size_preview_for_mode,
             inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
-                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model, krea_operation],
             outputs=size_info,
         )
         mode.change(
@@ -1361,7 +1379,7 @@ def build_app() -> gr.Blocks:
         ).then(
             _size_preview_for_mode,
             inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
-                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model, krea_operation],
             outputs=size_info,
         )
         swap_model.change(
@@ -1387,7 +1405,7 @@ def build_app() -> gr.Blocks:
         ).then(
             _size_preview_for_mode,
             inputs=[mode, size_multiplier, output_resolution, aspect_ratio, source,
-                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model],
+                    krea_source, swap_body, combine_1, combine_2, combine_3, model_key, swap_model, krea_operation],
             outputs=size_info,
         )
         swap_kind.change(
@@ -1396,10 +1414,10 @@ def build_app() -> gr.Blocks:
         size_preview_inputs = [
             mode, size_multiplier, output_resolution, aspect_ratio, source,
             krea_source, swap_body, combine_1, combine_2, combine_3,
-            model_key, swap_model,
+            model_key, swap_model, krea_operation,
         ]
         for control in [size_multiplier, source, krea_source, swap_body,
-                        output_resolution, combine_1, combine_2, combine_3, aspect_ratio]:
+                        output_resolution, combine_1, combine_2, combine_3, aspect_ratio, krea_operation]:
             control.change(
                 _size_preview_for_mode, inputs=size_preview_inputs, outputs=size_info
             )

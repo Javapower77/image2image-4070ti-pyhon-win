@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import uuid
@@ -33,6 +34,13 @@ from photo_edit_studio.comfy_workflows import (
 from photo_edit_studio.config import settings
 from photo_edit_studio.dlss import add_dlss_nodes, preflight_dlss, validate_dlss_request
 from photo_edit_studio.image_utils import constrain_output_size, normalize_image
+from photo_edit_studio.krea_all2real import (
+    KREA_ALL2REAL_MORE_REAL,
+    configure_krea_all2real_graph,
+    krea_all2real_template,
+    missing_krea_all2real_assets,
+    validate_krea_all2real_request,
+)
 from photo_edit_studio.models.base import ModelAdapter
 from photo_edit_studio.models.diffusers_adapters import FRAMING_SUFFIX
 from photo_edit_studio.models.memory import cuda_available, cuda_vram_gb
@@ -212,21 +220,26 @@ def configure_krea_remix_graph(
     return apply_krea_loras(graph, "71", request.loras, adjust_base_weight=False)
 
 
-def preflight_krea_remix_graph(graph: dict[str, Any], registered: dict[str, Any]) -> None:
+def preflight_krea_remix_graph(
+    graph: dict[str, Any], registered: dict[str, Any], *, label: str = "Krea remix"
+) -> None:
+    """Validate all configured nodes/inputs and retain canonical registered choices."""
     required = {node["class_type"] for node in graph.values()}
     missing = required - set(registered)
     if missing:
         raise RuntimeError(
-            f"Krea remix is missing ComfyUI nodes: {', '.join(sorted(missing))}. "
+                f"{label} is missing ComfyUI nodes: {', '.join(sorted(missing))}. "
             "Run scripts/setup-comfy.ps1 to install https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit "
-            "and restart ComfyUI. Identity-edit nodes cannot substitute for Ostris nodes."
+                "and restart ComfyUI. Identity-edit nodes cannot substitute for Ostris nodes."
+                + (" All2Real also requires custom_nodes/photo_edit_all2real.py and compatible core nodes."
+                    if label == "All2Real" else "")
         )
     for node in graph.values():
         schema = registered[node["class_type"]].get("input", {})
         inputs = {**schema.get("required", {}), **schema.get("optional", {})}
         for field, value in node["inputs"].items():
             if field not in inputs:
-                raise RuntimeError(f"Krea remix node {node['class_type']} lacks input {field}; update nodes and restart ComfyUI.")
+                raise RuntimeError(f"{label} node {node['class_type']} lacks input {field}; update nodes and restart ComfyUI.")
             choices = inputs[field][0]
             if choices == "COMBO" and len(inputs[field]) > 1:
                 choices = inputs[field][1].get("options", [])
@@ -236,7 +249,7 @@ def preflight_krea_remix_graph(graph: dict[str, Any], registered: dict[str, Any]
             if isinstance(choices, list) and not isinstance(value, list):
                 matches = [choice for choice in choices if str(choice).replace('\\', '/') == str(value).replace('\\', '/')]
                 if not matches:
-                    raise RuntimeError(f"Krea remix {node['class_type']} has not registered {field}={value}; check assets/update ComfyUI and restart.")
+                    raise RuntimeError(f"{label} {node['class_type']} has not registered {field}={value}; check assets/update ComfyUI and restart.")
                 node["inputs"][field] = matches[0]
 
 
@@ -245,6 +258,12 @@ def configure_krea_text_graph(
 ) -> dict[str, Any]:
     if request.model_key != "krea-2-turbo" or request.images:
         raise ValueError("Krea text workflow requires a Krea model and no input images.")
+    if not math.isfinite(request.guidance) or request.guidance <= 0:
+        raise ValueError(
+            "Krea text generation through ComfyUI requires a finite CFG greater than 0. "
+            "Use CFG 1 for positive-only conditioning; CFG 0 discards the positive prompt. "
+            "The official Diffusers guidance_scale=0 uses different semantics."
+        )
     graph["84"]["inputs"]["text"] = request.prompt
     graph["85"]["inputs"]["text"] = request.negative_prompt
     graph["53"]["inputs"].update(seed=request.seed, steps=request.steps, cfg=request.guidance)
@@ -313,6 +332,11 @@ def configure_krea_reference_graph(
     """Configure the Krea2Edit two-reference graph; reject disconnected/ignored inputs."""
     if request.model_key != "krea-2-turbo" or not 1 <= len(image_names) <= 2:
         raise ValueError("Krea reference editing needs a source and at most one reference.")
+    if not math.isfinite(request.guidance) or request.guidance <= 0:
+        raise ValueError(
+            "Krea reference editing requires a finite CFG greater than 0. "
+            "CFG 0 discards the positive edit instruction; start with CFG 1."
+        )
     source = graph.get("72")
     positive = graph.get("84")
     negative = graph.get("85")
@@ -764,7 +788,25 @@ class ComfyKreaSwapAdapter(ModelAdapter):
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
         validate_dlss_request(request)
-        if request.workflow == "krea-remix":
+        if request.workflow == "krea-all2real":
+            validate_krea_all2real_request(request)
+            missing = missing_krea_all2real_assets(settings.comfy_dir)
+            if missing:
+                raise FileNotFoundError(
+                    "All2Real original assets/custom nodes missing: " + ", ".join(missing) +
+                    ". Supply the exact user-owned assets manually; no downloads or substitutions."
+                )
+            graph = configure_krea_all2real_graph(krea_all2real_template(), request, ("source.png",))
+            # Qualify only AFTER the basename-based helpers select the base weight
+            # and build the shared two-sampler chain. Bind project library files,
+            # never a same-named vendor LoRA. Preflight resolves Windows separators.
+            library_names = {lora.name for lora in request.loras} | {KREA_ALL2REAL_MORE_REAL}
+            for node in graph.values():
+                if (node["class_type"] == "LoraLoaderModelOnly"
+                        and node["inputs"]["lora_name"] in library_names):
+                    node["inputs"]["lora_name"] = "krea2/" + node["inputs"]["lora_name"]
+            workflow_path = None
+        elif request.workflow == "krea-remix":
             validate_krea_remix_request(request)
             missing = missing_krea_remix_assets(settings.comfy_dir)
             if missing:
@@ -796,8 +838,8 @@ class ComfyKreaSwapAdapter(ModelAdapter):
             graph = krea_reference_template()
         graph = deepcopy(graph)
         url = _local_comfy_url(settings.comfy_url)
-        if request.workflow == "krea-remix":
-            ensure_backend(workflow="krea-remix")
+        if request.workflow in {"krea-remix", "krea-all2real"}:
+            ensure_backend(workflow=request.workflow)
         else:
             ensure_backend()
         with httpx.Client(base_url=url, timeout=60.0, trust_env=False) as client:
@@ -810,14 +852,20 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                     "docs/KREA_REFERENCES.md before using Krea reference editing."
                 ) from exc
             preflight_dlss(client, request)
-            if request.workflow == "krea-remix":
+            if request.workflow in {"krea-remix", "krea-all2real"}:
+                label = "All2Real" if request.workflow == "krea-all2real" else "Krea remix"
                 try:
                     response = client.get("/object_info")
                     response.raise_for_status()
                     registered = response.json()
+                    if not isinstance(registered, dict):
+                        raise ValueError("Expected a node registry dictionary.")
                 except (httpx.HTTPError, ValueError) as exc:
-                    raise RuntimeError("Cannot verify Krea remix Ostris nodes and registered assets.") from exc
-                preflight_krea_remix_graph(graph, registered)
+                    raise RuntimeError(f"Cannot verify {label} Ostris nodes and registered assets.") from exc
+                if request.workflow == "krea-all2real":
+                    preflight_krea_remix_graph(graph, registered, label="All2Real")
+                else:
+                    preflight_krea_remix_graph(graph, registered)
             names = []
             for index, image in enumerate(request.images):
                 if progress is not None:
@@ -833,7 +881,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                 )
                 response.raise_for_status()
                 names.append(response.json()["name"])
-            if request.workflow == "krea-remix":
+            if request.workflow in {"krea-remix", "krea-all2real"}:
                 # Already configured and preflighted; change only the uploaded source.
                 graph["72"]["inputs"]["image"] = names[0]
                 payload = graph
@@ -846,6 +894,8 @@ class ComfyKreaSwapAdapter(ModelAdapter):
             add_dlss_nodes(payload, request)
             queued = client.post("/prompt", json={"prompt": payload})
             if queued.status_code >= 400:
+                if request.workflow == "krea-all2real":
+                    raise RuntimeError(f"ComfyUI rejected the All2Real graph: {queued.text[:500]}")
                 if request.workflow == "krea-remix":
                     raise RuntimeError(f"ComfyUI rejected the Ostris Krea remix graph: {queued.text[:500]}")
                 raise RuntimeError(
@@ -863,6 +913,8 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                     if job.get("status", {}).get("status_str") == "error":
                         raise RuntimeError("ComfyUI reported an error; inspect its local console for details.")
                     outputs = job.get("outputs", {}).get("29", {}).get("images", [])
+                    if request.workflow == "krea-all2real" and len(outputs) != 1:
+                        raise RuntimeError("All2Real SaveImage 29 must return exactly one generated output.")
                     if outputs:
                         if request.workflow == "krea-remix" and len(outputs) != 1:
                             raise RuntimeError("Krea remix SaveImage 29 must return exactly one generated output.")

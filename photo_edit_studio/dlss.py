@@ -101,12 +101,12 @@ def validate_dlss_request(request: GenerationRequest) -> dict[str, Any] | None:
         and request.workflow in {"standard", "text", "swap"}
         or request.model_key == "firered-1.1" and request.workflow == "standard"
         or request.model_key == "krea-2-turbo"
-        and request.workflow in {"standard", "krea-text", "krea-reference", "krea-remix", "swap"}
+        and request.workflow in {"standard", "krea-text", "krea-reference", "krea-remix", "krea-all2real", "swap"}
     )
     if not supported:
         raise ValueError(
             "DLSS enhancement supports only current ComfyUI Qwen 2.1, FireRed and "
-            "Krea reference/remix/text/swap workflows; it is not supported by Diffusers. "
+            "Krea reference/remix/All2Real/text/swap workflows; it is not supported by Diffusers. "
             "Disable DLSS (dlss=None) or select a supported ComfyUI workflow."
         )
     return request.dlss

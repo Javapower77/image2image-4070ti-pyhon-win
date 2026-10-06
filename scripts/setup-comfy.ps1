@@ -26,6 +26,7 @@ if (-not (Test-Path (Join-Path $ostrisNodes "__init__.py"))) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone Ostris Krea2 edit nodes." }
 }
 $ggufNodes = Join-Path $target "custom_nodes\ComfyUI-GGUF"
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "comfy_all2real_nodes.py") -Destination (Join-Path $target "custom_nodes\photo_edit_all2real.py") -Force
 if (-not (Test-Path (Join-Path $ggufNodes "__init__.py"))) {
     if (Test-Path $ggufNodes) { throw "ComfyUI-GGUF node folder exists but is incomplete: $ggufNodes" }
     & git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git $ggufNodes

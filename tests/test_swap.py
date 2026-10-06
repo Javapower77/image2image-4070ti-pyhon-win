@@ -313,10 +313,96 @@ def test_krea_reference_edit_accepts_only_source_image() -> None:
     assert "image_b" not in graph["84"]["inputs"]
 
 
+@pytest.mark.parametrize("cfg", [0.0, -1.0, float("nan"), float("inf")])
+def test_reference_edit_rejects_prompt_discarding_cfg(cfg: float) -> None:
+    request = _request("Head")
+    request.guidance = cfg
+    with pytest.raises(ValueError, match="CFG greater than 0"):
+        configure_krea_reference_graph(krea_reference_template(), request, ("source.png",))
+
+
 def test_krea_reference_bridge_requires_loopback() -> None:
     assert _local_comfy_url("http://127.0.0.1:8188/") == "http://127.0.0.1:8188"
     with pytest.raises(ValueError, match="loopback"):
         _local_comfy_url("https://public-comfy.example.com")
+
+
+def test_reference_edit_submits_prompt_settings_and_active_lora_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import json
+    from io import BytesIO
+
+    import httpx
+
+    from photo_edit_studio.config import settings
+    from photo_edit_studio.models import comfy_swap
+    from photo_edit_studio.models.registry import MODEL_SPECS
+
+    monkeypatch.setattr(settings, "comfy_dir", tmp_path)
+    monkeypatch.setattr(settings, "comfy_reference_workflow", tmp_path / "absent.json")
+    monkeypatch.setattr(settings, "comfy_url", "http://127.0.0.1:8188")
+    monkeypatch.setattr(settings, "lora_dir", tmp_path / "library")
+    mandatory = tmp_path / "models" / "loras" / KREA_FIRST_LORA_FILE
+    mandatory.parent.mkdir(parents=True)
+    mandatory.touch()
+    extra = settings.lora_dir / "krea2" / "style.safetensors"
+    extra.parent.mkdir(parents=True)
+    extra.touch()
+    png = BytesIO()
+    Image.new("RGB", (64, 64), "red").save(png, format="PNG")
+    submitted = []
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        if r.url.path == "/system_stats":
+            return httpx.Response(200, json={})
+        if r.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "uploaded.png"})
+        if r.url.path == "/prompt":
+            submitted.append(json.loads(r.content)["prompt"])
+            return httpx.Response(200, json={"prompt_id": "job"})
+        if r.url.path == "/history/job":
+            return httpx.Response(200, json={"job": {"outputs": {
+                "29": {"images": [{"filename": "generated.png"}]}
+            }}})
+        assert r.url.path == "/view"
+        return httpx.Response(200, content=png.getvalue())
+
+    original_client = httpx.Client
+    monkeypatch.setattr(comfy_swap.httpx, "Client", lambda **kw: original_client(
+        **kw, transport=httpx.MockTransport(handler)
+    ))
+    monkeypatch.setattr(comfy_swap, "ensure_backend", lambda **kw: None)
+    adapter = comfy_swap.ComfyKreaSwapAdapter(MODEL_SPECS["krea-2-turbo"])
+    for prompt, seed, weight in [("Make the scene red", 123, 0.5),
+                                 ("Make the scene blue", 456, -0.75)]:
+        request = _request("Head")
+        request.workflow = "krea-reference"
+        request.prompt, request.seed = prompt, seed
+        request.negative_prompt = "blur"
+        request.width, request.height = 768, 1024
+        request.steps, request.guidance = 12, 1.5
+        request.krea_first_lora_weight = 0.8
+        request.loras = [LoraSpec(extra.name, extra, weight, "style")]
+        assert len(adapter.generate(request)) == 1
+        graph = submitted[-1]
+        assert graph["84"]["inputs"]["prompt"] == prompt
+        assert graph["85"]["inputs"]["prompt"] == "blur"
+        assert graph["53"]["inputs"]["positive"] == ["84", 0]
+        assert graph["53"]["inputs"]["negative"] == ["85", 0]
+        assert graph["53"]["inputs"]["model"] == ["79", 0]
+        assert graph["53"]["inputs"]["seed"] == seed
+        assert graph["53"]["inputs"]["steps"] == 12
+        assert graph["53"]["inputs"]["cfg"] == 1.5
+        assert graph["82"]["inputs"]["width"] == 768
+        assert graph["82"]["inputs"]["height"] == 1024
+        assert graph["29"]["inputs"]["images"] == ["54", 0]
+        assert graph["54"]["inputs"]["samples"] == ["53", 0]
+        assert _upstream_lora_chain(graph, "79") == [
+            (KREA_FIRST_LORA_FILE, 0.8), (settings.comfy_reference_lora, 1.0),
+            (extra.name, weight),
+        ]
+    assert len(submitted) == 2
 
 
 def test_krea_reference_engine_uses_comfy_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

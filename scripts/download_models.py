@@ -53,6 +53,34 @@ RECOMMENDED_MODELS = ["qwen-2511", "qwen-2511-aio", "flux-klein-4b"]
 QWEN21_R128_KEY = "qwen-2.1-turbo-r128"
 QWEN21_R128_FILENAME = "Qwen-Image-2.1-turbo-v0.2.1-6step-lora-r128.safetensors"
 QWEN21_R128_URL = "https://civitai.red/api/download/models/3384956?fileId=3273779"
+# These are pinned bytes, not evidence that the historical transformer was identical.
+# Destinations are relative to the embedded ComfyUI models directory.
+KREA_ORIGINAL_ASSETS = (
+    {
+        "repo": "Comfy-Org/Krea-2",
+        "revision": "6b1d7191d84d5ded74d83a1a98211dad0ac8ae25",
+        "remote": "diffusion_models/krea2_turbo_int8_convrot.safetensors",
+        "destination": "diffusion_models/krea2_turbo_int8_convrot-b19a4f0be264.safetensors",
+        "sha256": "8e4eeda70dd5037ab1ba2bef6b417f9f901e26093117cf397f741fc1fdaaf3f1",
+        "size": 13492686496,
+    },
+    {
+        "repo": "spacepxl/Wan2.1-VAE-upscale2x",
+        "revision": "384fb7de682e60bd54b59d6eea810ca9d9993497",
+        "remote": "Wan2.1_VAE_upscale2x_imageonly_real_v1.safetensors",
+        "destination": "vae/Wan2.1_VAE_upscale2x_imageonly_real_v1.safetensors",
+        "sha256": "2413554bbec24215185662d009893cf4666b8e777efece2d895e03e1a6b63e06",
+        "size": 507684560,
+    },
+    {
+        "repo": "timothy692/1x-ITF-SkinDiffDetail-Lite-v1",
+        "revision": "c5b4f4c21c62eb0819c9e3fd0f2ea15c343c3754",
+        "remote": "1x-ITF-SkinDiffDetail-Lite-v1.pth",
+        "destination": "upscale_models/1x-ITF-SkinDiffDetail-Lite-v1.pth",
+        "sha256": "94d368b633614958f84f335b129fd85abd30200e8fbc575b859ba6762116222b",
+        "size": 20099337,
+    },
+)
 _TOKENS: dict[str, str | None] = {}
 AUTH_HELP = {
     "HF": "Set HF_TOKEN or sign in with the Hugging Face CLI for gated assets.",
@@ -216,6 +244,88 @@ def _download_named_file(repo: str, remote: str, destination: Path) -> None:
         downloaded.replace(destination)
 
 
+def _pinned_asset_error(path: Path, asset: dict) -> str | None:
+    """Verify bytes without tensor materialization or deserializing pickle checkpoints."""
+    if path.stat().st_size != asset["size"]:
+        return f"size mismatch (expected {asset['size']} bytes)"
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != asset["sha256"]:
+        return "SHA256 mismatch"
+    if path.suffix == ".safetensors" and not _valid_safetensors(path):
+        return "invalid Safetensors header"
+    return None
+
+
+def _download_pinned_krea_asset(asset: dict, target: Path) -> None:
+    destination = target / asset["destination"]
+    # Never silently replace a stale file. Move/remove it explicitly and rerun
+    # to download a replacement into same-filesystem staging before installation.
+    detail = "local file verification failed"
+    try:
+        if destination.exists():
+            error = _pinned_asset_error(destination, asset)
+            if error:
+                detail = (
+                    f"Existing file: {error}. Left unchanged; move/remove it and rerun."
+                )
+                raise RuntimeError(detail)
+            print(f"Already present (size/SHA256 verified): {destination}")
+            return
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading {asset['repo']}@{asset['revision']}/{asset['remote']} -> {destination}")
+        detail = f"pinned Hugging Face download failed. {AUTH_HELP['HF']}"
+        with tempfile.TemporaryDirectory(
+            dir=destination.parent, prefix=destination.name + ".staging-"
+        ) as staging:
+            downloaded = Path(_hf_download(
+                hf_hub_download,
+                repo_id=asset["repo"],
+                revision=asset["revision"],
+                filename=asset["remote"],
+                local_dir=Path(staging),
+            ))
+            detail = "downloaded file verification failed"
+            error = _pinned_asset_error(downloaded, asset)
+            if error:
+                detail = f"Downloaded file: {error}; not installed."
+                raise RuntimeError(detail)
+            # A concurrently installed file must also pass verification; do not
+            # overwrite it just because it appeared while the download was running.
+            if destination.exists():
+                detail = "Destination appeared during download; left unchanged. Rerun to verify it."
+                raise RuntimeError(detail)
+            detail = "atomic installation failed"
+            downloaded.replace(destination)
+    except Exception:  # noqa: BLE001 - never expose SDK URLs, bodies or credentials
+        message = f"Krea originals asset failed ({destination.name}): {detail}"
+        print(message, file=sys.stderr)
+        raise RuntimeError(message) from None
+
+
+def download_comfy_krea_originals() -> None:
+    """Install only the three approved workflow assets, separately from recommendations."""
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    total = sum(asset["size"] for asset in KREA_ORIGINAL_ASSETS)
+    print(f"Krea originals: three pinned assets, {total / 1024**3:.2f} GiB total.")
+    print(
+        "Transformer substitution: approved current publisher INT8 alias installed as "
+        "krea2_turbo_int8_convrot-b19a4f0be264.safetensors. The exact historical suffix "
+        "was not found; this is NOT proof of identical original bytes."
+    )
+    print(
+        "Skin checkpoint provenance: timothy692 mirror; the same SHA256 was verified "
+        "in the gemasai mirror. License metadata is None (not a license grant); "
+        "review upstream provenance/license before use. The .pth file is verified "
+        "as bytes only, never pickle-loaded by this downloader."
+    )
+    for asset in KREA_ORIGINAL_ASSETS:
+        _download_pinned_krea_asset(asset, settings.comfy_dir / "models")
+
+
 def download_krea_turbo_lora() -> None:
     """Optional official Turbo adapter; it is not required by the Turbo checkpoint."""
     _download_named_file(
@@ -332,6 +442,10 @@ def main() -> None:
         "--comfy-krea", action="store_true", help="Download Krea Turbo ComfyUI checkpoints and identity-edit LoRA"
     )
     parser.add_argument(
+        "--comfy-krea-originals", action="store_true",
+        help="Download only three pinned Krea workflow assets (~13.06 GiB), with the approved current INT8 alias substitution",
+    )
+    parser.add_argument(
         "--comfy-firered", action="store_true", help="Download only FireRed GGUF Q4_K_M, FP8 vision encoder, VAE and Lightning v1.2"
     )
     parser.add_argument(
@@ -346,7 +460,7 @@ def main() -> None:
     unknown = [key for key in args.models if key not in MODEL_SPECS]
     if unknown:
         parser.error(f"Unknown model(s): {', '.join(unknown)}")
-    selected = list(MODEL_SPECS) if args.all else (args.models or ([] if args.bfs_swap or args.comfy_krea or args.comfy_firered or args.comfy_qwen21 or args.turbo_lora else RECOMMENDED_MODELS))
+    selected = list(MODEL_SPECS) if args.all else (args.models or ([] if args.bfs_swap or args.comfy_krea or args.comfy_krea_originals or args.comfy_firered or args.comfy_qwen21 or args.turbo_lora else RECOMMENDED_MODELS))
     for key in selected:
         spec = MODEL_SPECS[key]
         if spec.loader == "firered_comfy":
@@ -387,6 +501,8 @@ def main() -> None:
     if args.comfy_krea and "krea-2-turbo" not in selected:
         download_comfy_krea()
         download_krea_turbo_lora()
+    if args.comfy_krea_originals:
+        download_comfy_krea_originals()
     if args.comfy_firered and "firered-1.1" not in selected:
         download_comfy_firered()
     if args.comfy_qwen21 and "qwen-2.1-turbo" not in selected:

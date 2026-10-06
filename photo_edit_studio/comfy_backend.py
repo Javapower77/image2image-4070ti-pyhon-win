@@ -19,6 +19,7 @@ from photo_edit_studio.comfy_assets import (
     missing_qwen21_assets,
 )
 from photo_edit_studio.config import settings
+from photo_edit_studio.krea_all2real import missing_krea_all2real_assets
 
 _process: subprocess.Popen[bytes] | None = None
 _log_handle = None
@@ -62,6 +63,14 @@ def ensure_backend(
 ) -> bool:
     """Start only our own local ComfyUI; never claim an unrelated server is embedded."""
     global _process, _log_handle
+    all2real = model_key == "krea-2-turbo" and workflow == "krea-all2real"
+    if all2real:
+        missing = missing_krea_all2real_assets(settings.comfy_dir)
+        if missing:
+            raise FileNotFoundError(
+                "All2Real original assets/custom nodes missing: " + ", ".join(missing) +
+                ". Supply the exact user-owned assets manually; no downloads or substitutions."
+            )
     if enabled is None:
         enabled = settings.comfy_autostart
     if not enabled:
@@ -80,7 +89,10 @@ def ensure_backend(
         raise FileNotFoundError(
             f"Embedded ComfyUI not installed at {main}. Run scripts/setup-comfy.ps1."
         )
-    if model_key == "krea-2-turbo" and workflow == "krea-remix":
+    if all2real:
+        missing = []  # Exact originals checked even when reusing a running backend.
+        hint = "All2Real (manual original assets only)"
+    elif model_key == "krea-2-turbo" and workflow == "krea-remix":
         missing = missing_krea_remix_assets(settings.comfy_dir)
         hint = "--comfy-krea (place Krea2-Remix_Patreon.safetensors in vendor/ComfyUI/models/loras manually)"
     elif model_key == "firered-1.1":

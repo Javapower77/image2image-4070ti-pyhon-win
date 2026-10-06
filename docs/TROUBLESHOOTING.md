@@ -24,6 +24,17 @@ Open `https://huggingface.co/krea/Krea-2-Turbo`, sign in, accept the Krea 2 Comm
 
 The **Krea reference edit** workflow uses an optional project-managed ComfyUI backend. Run `.\scripts\setup-comfy.ps1`, download weights with `python scripts/download_models.py --comfy-krea`, and start `.\scripts\run.ps1 -ComfyUI`. The default API graph is bundled; no manual export is required. For startup errors inspect `logs/comfyui.log` and follow `docs/KREA_REFERENCES.md`.
 
+## Krea text output ignores the positive prompt
+
+Check CFG in Run Details. The previous UI default of 0 discarded positive-prompt
+conditioning in ComfyUI's standard sampler. The corrected default is **CFG 1**;
+text generation now rejects CFG 0 instead of silently producing empty/negative
+prompt output. The official Diffusers `guidance_scale=0` is not equivalent.
+Restart the studio, refresh the browser, select Krea again and verify CFG 1.
+Retry the same prompt/seed at 1K with optional LoRAs and DLSS disabled before
+comparing higher resolutions or adapters. This does not guarantee exact prompt
+adherence; model limitations and adapters can still affect the result.
+
 ## Application disappears or loses its server connection
 
 Restart using the Windows launcher to enable console capture. Diagnostics are stored in:

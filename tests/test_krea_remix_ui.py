@@ -42,7 +42,7 @@ def test_remix_ui_fixes_model_and_ignores_unrelated_controls(monkeypatch):
 
 
 def test_remix_ui_requires_canvas():
-    with pytest.raises(ValueError, match="composed canvas"):
+    with pytest.raises(ValueError, match="Upload Picture 1.*Composition remix"):
         ui._run_krea_edit(
             "Composition remix", None, None, "remix", "", 1, 9, 1, 666, "Off", 0,
         )

@@ -26,6 +26,7 @@ Use the Windows downloader from the repository root:
 - Qwen Image 2.1 + Viggle Turbo r256: first `.\scripts\setup-comfy.ps1`, then `.\scripts\download-models.ps1 -Preset qwen-2.1`; start with `.\scripts\run.ps1 -ComfyUI` (non-commercial research license).
 - FLUX.2 Klein 4B: `.\scripts\download-models.ps1 -Preset flux-4b`
 - Krea 2 Turbo: `.\scripts\download-models.ps1 -Preset krea-2`
+- Optional Krea All2Real three-asset set: after `.\scripts\setup-comfy.ps1`, run `.\scripts\download-models.ps1 -Preset krea-originals` (~13.06 GiB plus staging/cache space; not a complete All2Real setup).
 - FireRed 1.1 GGUF Q4_K_M + Lightning v1.2: first `.\scripts\setup-comfy.ps1`, then `.\scripts\download-models.ps1 -Preset firered`; start with `.\scripts\run.ps1 -ComfyUI`.
 - Every registered model: `.\scripts\download-models.ps1 -Preset all` (not recommended for 12 GB)
 
@@ -36,6 +37,26 @@ Krea 2 Turbo is gated. Visit `https://huggingface.co/krea/Krea-2-Turbo`, accept 
 For **Krea reference edit**, install the optional project-managed ComfyUI in the existing venv with `.\scripts\setup-comfy.ps1`, download Krea ComfyUI checkpoints with `python scripts/download_models.py --comfy-krea`, then launch `.\scripts\run.ps1 -ComfyUI`. The Krea Diffusers snapshot is text-only and is not a ComfyUI checkpoint. See `docs/KREA_REFERENCES.md` for model and privacy details.
 
 FireRed's quantized transformer alone exceeds 12 GB VRAM: it relies on ComfyUI's low-VRAM CPU offload, not full GPU residency. See `docs/MODELS.md`.
+
+### Optional All2Real download and changed asset decision
+
+Python equivalent: `.\.venv\Scripts\python.exe scripts\download_models.py --comfy-krea-originals`.
+Used alone, the option downloads only the approved INT8 alias, exact spacepxl Wan
+upscale VAE and exact skin filename from the timothy692 mirror (same SHA256 as
+gemasai). It does not obtain MoreReal, the shared encoder or mandatory first
+adapter, and is not automatically included in recommended/all-model downloads.
+
+The exact historical suffixed transformer was not found. The user explicitly
+approved current Comfy-Org/Krea-2 INT8 Turbo saved under
+`krea2_turbo_int8_convrot-b19a4f0be264.safetensors`; the alias is **not proof of
+identical upstream-original bytes**. Runtime never downloads or silently
+substitutes/falls back. Staged downloads are size/SHA256 verified and Safetensors
+header validated before installation. Existing mismatches are retained with an
+error; move/remove them explicitly before rerunning to replace them. The
+downloader never pickle-loads the skin `.pth`. Its license metadata is unavailable,
+not permission to use it; review source provenance and terms. See
+[All2Real pinned sources, hashes and remaining prerequisites](KREA_ALL2REAL.md).
+Neither the 12 GB GPU nor 64 GB RAM guarantees this workflow fits memory.
 
 ## Run
 

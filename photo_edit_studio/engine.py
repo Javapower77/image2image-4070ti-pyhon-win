@@ -45,7 +45,24 @@ def generate(
             raise ValueError("Choose a text-capable model for Create from text.")
         if request.images:
             raise ValueError("Create from text does not accept source images.")
-    if request.workflow == "krea-remix":
+    if request.workflow == "krea-all2real":
+        from photo_edit_studio.krea_all2real import validate_krea_all2real_request
+        from photo_edit_studio.models.comfy_swap import krea_remix_size
+
+        # The original graph needs a concrete seed plus a non-wrapping seed+1.
+        # Reject malformed seeds through its validator, not silent coercion.
+        if type(request.seed) is int and request.seed < 0:
+            request.seed = secrets.randbelow(2**31 - 1)
+        validate_krea_all2real_request(request)
+        if restoration != "Off":
+            raise ValueError("All2Real returns generated output only; face restoration must be Off.")
+        request.compose = False
+        # This is the uploaded SOURCE budget, not a text/empty-latent canvas.
+        # Graph 73 then scales to 1MP and graph 75 applies Flux aspect buckets;
+        # the original Wan VAE decodes/upscales between passes and at output.
+        request.width, request.height = krea_remix_size(request)
+        input_max_side = 1024
+    elif request.workflow == "krea-remix":
         from photo_edit_studio.models.comfy_swap import krea_remix_size, validate_krea_remix_request
 
         validate_krea_remix_request(request)
@@ -104,11 +121,11 @@ def generate(
         canvas=canvas_workflow,
         pre_sized=True,
     )
-    if (request.width, request.height) != requested_size and request.workflow != "krea-remix":
+    if (request.width, request.height) != requested_size and request.workflow not in {"krea-remix", "krea-all2real"}:
         input_max_side = max(request.width, request.height)
     request.count = min(request.count, settings.max_batch_count)
     input_limit = (
-        1 if request.workflow == "krea-remix" else
+        1 if request.workflow in {"krea-remix", "krea-all2real"} else
         2 if request.workflow in {"swap", "krea-reference"} else spec.max_images
     )
     request.images = [
@@ -119,7 +136,7 @@ def generate(
         request.seed = secrets.randbelow(2**31 - 1)
 
     started = time.perf_counter()
-    if request.workflow in {"swap", "krea-reference", "krea-text", "krea-remix"} and request.model_key == "krea-2-turbo":
+    if request.workflow in {"swap", "krea-reference", "krea-text", "krea-remix", "krea-all2real"} and request.model_key == "krea-2-turbo":
         from photo_edit_studio.models.comfy_swap import ComfyKreaSwapAdapter
 
         model_manager.unload()
@@ -127,6 +144,8 @@ def generate(
     else:
         adapter = model_manager.get(request.model_key)
     images = adapter.generate(request, progress=progress)
+    if request.workflow == "krea-all2real" and len(images) != 1:
+        raise RuntimeError("All2Real must return exactly one generated output.")
     if request.workflow == "krea-remix" and len(images) != 1:
         raise RuntimeError("Krea remix must return exactly one generated output.")
     if progress is not None:
@@ -137,7 +156,26 @@ def generate(
             f"Low-VRAM limit reduced {requested_size[0]}×{requested_size[1]} to "
             f"{request.width}×{request.height}."
         )
-    if request.workflow == "krea-remix":
+    if request.workflow == "krea-all2real":
+        notes.append(
+            f"All2Real source budget capped at 1024: {request.width}×{request.height}; "
+            f"actual uploaded source {request.images[0].width}×{request.images[0].height}. "
+            "These are not diffusion/output dimensions: the original graph scales to 1MP, "
+            "blurs and applies FluxKontext aspect-bucket scaling. No text canvas is selected."
+        )
+        notes.append(
+            "Original INT8 model, FP8 vision encoder, Wan upscale VAE and skin-detail model; "
+            "mandatory first LoRA before Ostris, then MoreReal and selected optional LoRAs "
+            "on the same model chain for both er_sde passes (kl_optimal then simple). "
+            "Refinement removes reference metadata without re-encoding text."
+        )
+        notes.append(
+            "The original Wan VAE decodes with its native upscale between passes and at output; "
+            "actual output dimensions change independently of the source budget. Core VAEDecode "
+            "equivalence to the upstream VAEUtils tile=False/upscale=-1 wrapper is not established. "
+            "Final returned size: " + ", ".join(f"{image.width}×{image.height}" for image in images) + "."
+        )
+    elif request.workflow == "krea-remix":
         notes.append(
             f"Krea Ostris remix of one uploaded canvas, capped at 1024: {request.width}×{request.height}. "
             "Remix and optional LoRAs first pass only; mandatory first LoRA on both passes; no diffusion upscale."
@@ -182,9 +220,14 @@ def generate(
         notes.append(f"Applied {restoration} post-processing.")
         release_cuda()
     if dlss is not None:
+        dlss_input = (
+            "after All2Real Wan decode and skin detail (source budget "
+            f"{request.width}×{request.height}, not the DLSS input size)"
+            if request.workflow == "krea-all2real" else
+            f"after diffusion at {request.width}×{request.height}"
+        )
         notes.append(
-            f"DLSS 5 enhancement ({dlss['upscaling_mode']}) after diffusion at "
-            f"{request.width}×{request.height}; final sizes: "
+            f"DLSS 5 enhancement ({dlss['upscaling_mode']}) {dlss_input}; final sizes: "
             + ", ".join(f"{image.width}×{image.height}" for image in images)
             + ". Enhancement scaling is separate from the diffusion VRAM budget; "
             "upscaling requires additional runtime/GPU memory."
@@ -250,6 +293,14 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
         "loras": [{"name": spec.name, "weight": spec.weight} for spec in request.loras],
         "prompt_stored": False,
     }
+    if request.workflow == "krea-all2real":
+        metadata["source_budget"] = [request.width, request.height]
+        metadata["uploaded_source_size"] = list(request.images[0].size)
+        metadata["graph_source_scaling"] = "1MP then FluxKontext aspect buckets"
+        metadata["native_wan_vae_upscale_requested"] = True
+        metadata["upstream_vae_wrapper_parity_verified"] = False
+        metadata["actual_output_sizes"] = [list(image.size) for image in result.images]
+        metadata["width_height_are_source_budget"] = True
     if MODEL_SPECS[request.model_key].family == "qwen21":
         from photo_edit_studio.comfy_assets import (
             QWEN21_R128_FILE_ID,
@@ -274,7 +325,10 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
             metadata["license"] = "Qwen Research License Agreement (non-commercial)"
     if request.dlss is not None and request.dlss["enabled"]:
         metadata["dlss"] = request.dlss.copy()
-        metadata["diffusion_size"] = [request.width, request.height]
+        if request.workflow == "krea-all2real":
+            metadata["dlss_input_stage"] = "after native Wan VAE decode and skin detail"
+        else:
+            metadata["diffusion_size"] = [request.width, request.height]
         metadata["enhanced_output_sizes"] = [list(image.size) for image in result.images]
         metadata["enhancement_scaling_separate_from_diffusion_budget"] = True
     paths: list[Path] = []

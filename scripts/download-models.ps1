@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "qwen-2.1-r128", "flux-4b", "krea-2", "firered", "all")]
+    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "qwen-2.1-r128", "flux-4b", "krea-2", "krea-originals", "firered", "all")]
     [string]$Preset = "recommended",
     [switch]$Restorers,
     [switch]$BfsSwap,
@@ -25,6 +25,7 @@ switch ($Preset) {
     "qwen-2.1-r128" { $models = @("qwen-2.1-turbo-r128") }
     "flux-4b" { $models = @("flux-klein-4b") }
     "krea-2" { $models = @("krea-2-turbo") }
+    "krea-originals" { $models = @("--comfy-krea-originals") }
     "firered" { $models = @("firered-1.1") }
     "all" { $models = @("--all") }
 }
