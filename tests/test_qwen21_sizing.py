@@ -13,7 +13,13 @@ from photo_edit_studio.image_utils import diffusion_output_size
 from photo_edit_studio.models.comfy_swap import configure_qwen21_graph
 from photo_edit_studio.swap import QWEN21_BFS_HEAD_FILE
 from photo_edit_studio.types import GenerationRequest, LoraSpec
-from photo_edit_studio.ui import COMBINE_MODE, EDIT_MODE, SWAP_MODE, TEXT_MODE, _size_preview_for_mode
+from photo_edit_studio.ui import (
+    COMBINE_MODE,
+    EDIT_MODE,
+    SWAP_MODE,
+    TEXT_MODE,
+    _size_preview_for_mode,
+)
 
 QWEN_KEYS = ("qwen-2.1-turbo", "qwen-2.1-turbo-r128")
 SOURCE_SIZE = (3784, 4852)

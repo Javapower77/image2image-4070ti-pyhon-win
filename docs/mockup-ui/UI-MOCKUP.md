@@ -18,7 +18,7 @@ Next are the detailed description of each section:
   - Next to the name, the text "Beta" plus the release number from Changelog.md and the date of the last modification
   - Bellow, a subtitle "Powered by Javapower", last word in bold.
 - B: Workflow selection
-  - A toolbox with 5 icons that represent each workflow implement in the application. As the user select each of them, the different UI components will rendered according to the options associated with each workflow.
+  - A toolbox with 6 icons: Edit source, Combine images, Create from text, Krea reference edit, Swap head / body, and Character Sheet Creator (sixth notebook). Selection renders each workflow's own controls; existing five routes are preserved.
 - C: Progress Bar
   - A detailed progress bar that has three parts:
     - A text with the detail task current executing,
@@ -45,6 +45,23 @@ Next are the detailed description of each section:
     - Advanced LoRAs - Up to 5. This section the user will select the LoRAs to be applied in the image generation,
     - Face Restoration. This section will configure if the user select to apply a face restoration to the image generated,
     - Other Option. This section will have another extra components.
+
+## Workflow: "Character Sheet Creator"
+
+Select the sixth notebook icon. Its asset is
+`photo_edit_studio/assets/ui/notebook.svg`, 24×24, viewBox `0 0 24 24`, with notebook
+binding, portrait and list paths (Gradio serves a cached copy of the same SVG).
+The description card explains one-reference full-BF16 Qwen sheets, separate from
+Krea sheets. Own controls: source image, Simple/Production, Static/Auto, entity
+name, character description and 1/3.4/6 MP (default 3.4). Shared prompt supplies
+Static customization or Auto extras. Optional adapters use the qwen21 library.
+
+No visible model picker, Variants or Size trigger; fixed 25 steps/CFG 1, true CFG
+1 at request time, restoration Off and no mask/swap. Dedicated native canvases
+are 1248×832, 2304×1536 and 3072×2048. Mode selection updates 17 components,
+toolbar changes update 14; the sheet submit event, like other generation events,
+is a four-output generator (gallery, details, status, progress). Old hidden model
+selections remain intact. See [assets, adaptations and limits](../QWEN_CHARACTER_SHEET.md).
 
 ## From the Old UI to the New UI
 
@@ -585,6 +602,31 @@ This are the SVG elements for the icons on the top toolbar representing each wor
 <path d="M13.192 9h6.616a2 2 0 0 1 1.992 2.183l-.567 6.182a4 4 0 0 1 -3.983 3.635h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183z"></path><path d="M15 13h.01"></path><path d="M18 13h.01"></path><path d="M15 16.5c1 .667 2 .667 3 0"></path><path d="M8.632 15.982a4.037 4.037 0 0 1 -.382 .018h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183h6.616a2 2 0 0 1 2 2"></path><path d="M6 8h.01"></path><path d="M9 8h.01"></path><path d="M6 12c.764 -.51 1.528 -.63 2.291 -.36"></path>
 </svg>
 </a>
+```
+
+- Character Sheet
+
+```html
+  <!-- Character Sheet-->
+      <a class="venice-icon-btn" data-active  aria-label="Edit" href="#">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Notebook -->
+          <path d="M5 1.5h15a2 2 0 0 1 2 2v17a2 2 0 0 1-2 2H5z"/>
+          <path fill="currentColor" stroke="none" d="M5 1.5H3a2 2 0 0 0-2 2v17a2 2 0 0 0 2 2h2z"/>
+          <!-- Binding notches -->
+          <path stroke="white" stroke-width="0.8" d="M1 4h1.5M1 6.3h1.5M1 8.6h1.5M1 10.9h1.5 M1 13.2h1.5M1 15.5h1.5M1 17.8h1.5M1 20.1h1.5"/>
+          <!-- Portrait frame -->
+          <path d="M17.5 8a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0z" stroke-width="0.6"/>
+          <!-- Head -->
+          <path fill="currentColor" stroke="none" d="M14.6 6.5a1.6 1.6 0 1 1-3.2 0 1.6 1.6 0 0 1 3.2 0z"/>
+          <!-- Shoulders -->
+          <path fill="currentColor" stroke="none"
+          d="M10 11.3l.4-1.6c.2-.7.7-1 1.5-1.2l1.1.5 1.1-.5c.8.2 1.3.5 1.5 1.2l.4 1.6a4.5 4.5 0 0 1-6 0z"/>
+          <!-- List -->
+          <path stroke-width="0.65" d="M7.5 14.4h1.2m2 0h7.8 M7.5 16.4h1.2m2 0h7.8 M7.5 18.4h1.2m2 0h7.8 M7.5 20.4h1.2m2 0h7.8"/>
+        </svg>
+      </a>
+```html
 ```
 
 ### Icons - Toolbar inside the Prompt Text section

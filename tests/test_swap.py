@@ -26,9 +26,16 @@ def test_swap_profiles_target_exact_model_families() -> None:
         ("krea-2-turbo", "Head"), ("krea-2-turbo", "Body"),
         ("qwen-2.1-turbo", "Head"), ("qwen-2.1-turbo", "Body"),
         ("qwen-2.1-turbo-r128", "Head"), ("qwen-2.1-turbo-r128", "Body"),
+        ("qwen-2.1-turbo-official", "Head"), ("qwen-2.1-turbo-official", "Body"),
     }
     with pytest.raises(ValueError, match="does not support"):
         swap_profile("qwen-2511-aio", "Head")
+    for kind in ("Head", "Body"):
+        assert swap_profile("qwen-2.1-turbo-official", kind) is swap_profile(
+            "qwen-2.1-turbo", kind,
+        )
+        with pytest.raises(ValueError, match="does not support"):
+            swap_profile("qwen-2.1-turbo-official-extract", kind)
 
 
 def test_swap_missing_required_lora_fails_before_inference(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

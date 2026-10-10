@@ -5,9 +5,12 @@ The **DLSS 5 enhancement · ComfyUI only** accordion enables the upstream
 It is off by default. When enabled, `DLSS5Settings` feeds `DLSS5EnhanceImages`
 between the generated IMAGE and SaveImage node 29.
 
-Supported paths: Qwen Image 2.1 editing, combination, text and swaps; Krea
+Supported paths: the two six-step **ComfyUI** Qwen Image 2.1 profiles' editing,
+combination, text and swaps; Krea
 reference edit, Composition remix, text and swaps; FireRed editing. Disable
-enhancement when selecting Diffusers models (Rapid AIO, Qwen 2511 or FLUX).
+enhancement when selecting Diffusers models (Rapid AIO, Qwen 2511, FLUX or either
+official Qwen 2.1 profile). Official BF16 BFS also rejects DLSS; direct official
+requests must use `dlss=None`, not a disabled settings dictionary.
 Unsupported requests fail before model loading rather than silently skipping it.
 
 ## Setup

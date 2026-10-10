@@ -38,6 +38,27 @@ if (-not (Test-Path (Join-Path $dlssNodes "__init__.py"))) {
     & git clone --depth 1 https://github.com/Blueforcer/ComfyUI-DLSS5-Enhancer.git $dlssNodes
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone DLSS5 nodes." }
 }
+# The supplied character-sheet graph records these revisions. Only new clones
+# are checked out: never reset/pull an existing user-managed node installation.
+$sheetNodePins = @(
+    @{ Name = "ComfyUI-KJNodes"; Repository = "https://github.com/kijai/ComfyUI-KJNodes.git"; Revision = "d3cfe21625e5170126ce06fbfcfe1d88108688c3" },
+    @{ Name = "ComfyUI-DeGrid"; Repository = "https://github.com/lunaaispace-eng/ComfyUI-DeGrid.git"; Revision = "5699bc33f71e1be12523fdea105cc9c2abfe1cd0" }
+)
+foreach ($pin in $sheetNodePins) {
+    $nodeTarget = Join-Path $target ("custom_nodes\" + $pin.Name)
+    if (-not (Test-Path (Join-Path $nodeTarget "__init__.py"))) {
+        if (Test-Path $nodeTarget) { throw "Character-sheet node folder exists but is incomplete: $nodeTarget" }
+        & git clone --no-checkout $pin.Repository $nodeTarget
+        if ($LASTEXITCODE -ne 0) { throw "Failed to clone $($pin.Name)." }
+        & git -C $nodeTarget checkout --detach $pin.Revision
+        if ($LASTEXITCODE -ne 0) { throw "Failed to check out pinned $($pin.Name) revision." }
+        if (-not (Test-Path (Join-Path $nodeTarget "__init__.py"))) { throw "Pinned $($pin.Name) lacks __init__.py." }
+    } else {
+        Write-Host "Keeping existing $($pin.Name) unchanged; graph reference revision: $($pin.Revision)."
+    }
+}
+# QwenImage21Cache/TextEncodeQwenImage21/TextGenerate are ComfyUI core nodes,
+# verified in local /object_info. No third cache-node dependency or model download.
 & $python -m pip install -r (Join-Path $target "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "ComfyUI requirements failed to install in the project venv." }
 $ostrisRequirements = Join-Path $ostrisNodes "requirements.txt"
@@ -49,6 +70,13 @@ if (Test-Path $ostrisRequirements) {
 if ($LASTEXITCODE -ne 0) { throw "ComfyUI-GGUF requirements failed to install in the project venv." }
 & $python -m pip install -r (Join-Path $dlssNodes "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "DLSS5 Python requirements failed to install in the project venv." }
+foreach ($pin in $sheetNodePins) {
+    $nodeRequirements = Join-Path $target ("custom_nodes\" + $pin.Name + "\requirements.txt")
+    if (Test-Path $nodeRequirements) {
+        & $python -m pip install -r $nodeRequirements
+        if ($LASTEXITCODE -ne 0) { throw "$($pin.Name) requirements failed to install in the project venv." }
+    }
+}
 # Do not invoke install_runtime.py or download/run proprietary binaries here.
 Write-Host "Optional DLSS5: Python nodes installed only. Restart ComfyUI to register the V3 nodes."
 Write-Host "Runtime is explicit/manual: review upstream licenses and install_runtime.py instructions yourself."
@@ -57,5 +85,7 @@ Write-Host "Supply DLSS 5 Visual Enhancer v3.0 runtime via runtime_dir (folder c
 if ($LASTEXITCODE -ne 0) { throw "The shared Python environment lost CUDA support." }
 Write-Host "ComfyUI installed into the project venv at $target."
 Write-Host "Next: python scripts\download_models.py --comfy-krea"
+Write-Host "Optional full BF16 Qwen sheets: .\scripts\download-models.ps1 -Preset qwen-character-sheet"
+Write-Host "Restart ComfyUI after installing nodes; Qwen cache/encoding/generation require current core nodes."
 Write-Host "For remix, manually place Krea2-Remix_Patreon.safetensors in vendor\ComfyUI\models\loras; no Remix weights are downloaded by setup."
 Write-Host "Then: .\scripts\run.ps1 -ComfyUI"

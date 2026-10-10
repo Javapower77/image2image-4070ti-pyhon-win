@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "qwen-2.1-r128", "flux-4b", "krea-2", "krea-originals", "firered", "all")]
+    [ValidateSet("recommended", "qwen-aio", "qwen-2.1", "qwen-2.1-r128", "qwen-2.1-bfs", "qwen-2.1-official", "qwen-2.1-official-extract", "qwen-character-sheet", "flux-4b", "krea-2", "krea-originals", "krea-character-sheets", "firered", "all")]
     [string]$Preset = "recommended",
     [switch]$Restorers,
     [switch]$BfsSwap,
@@ -23,9 +23,14 @@ switch ($Preset) {
     "qwen-aio" { $models = @("qwen-2511", "qwen-2511-aio") }
     "qwen-2.1" { $models = @("qwen-2.1-turbo") }
     "qwen-2.1-r128" { $models = @("qwen-2.1-turbo-r128") }
+    "qwen-2.1-bfs" { $models = @("--qwen21-bfs") }
+    "qwen-2.1-official" { $models = @("qwen-2.1-turbo-official") }
+    "qwen-2.1-official-extract" { $models = @("qwen-2.1-turbo-official-extract") }
+    "qwen-character-sheet" { $models = @("--comfy-qwen-character-sheet") }
     "flux-4b" { $models = @("flux-klein-4b") }
     "krea-2" { $models = @("krea-2-turbo") }
     "krea-originals" { $models = @("--comfy-krea-originals") }
+    "krea-character-sheets" { $models = @("--comfy-krea-character-sheets") }
     "firered" { $models = @("firered-1.1") }
     "all" { $models = @("--all") }
 }

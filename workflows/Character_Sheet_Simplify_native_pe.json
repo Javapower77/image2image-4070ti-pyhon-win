@@ -1,0 +1,2485 @@
+{
+  "id": "344295a2-49c3-40b6-8678-9f86aa747e72",
+  "revision": 0,
+  "last_node_id": 597,
+  "last_link_id": 1031,
+  "nodes": [
+    {
+      "id": 577,
+      "type": "ResolutionSelector",
+      "pos": [
+        -141.25029549395242,
+        3053.636052700748
+      ],
+      "size": [
+        273.0476514238372,
+        190.00014358519093
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "showAdvanced": true,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            1008
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            1009
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.36.0",
+        "Node name for S&R": "ResolutionSelector"
+      },
+      "widgets_values": [
+        "3:2 (Photo)",
+        3.4,
+        32
+      ],
+      "widgets_values_named": {
+        "aspect_ratio": "3:2 (Photo)",
+        "megapixels": 3.4,
+        "multiple": 32
+      }
+    },
+    {
+      "id": 578,
+      "type": "99ba1998-bf35-4a70-b4e7-47d3c8f10d3d",
+      "pos": [
+        650.0574490218758,
+        2593.8400534128887
+      ],
+      "size": [
+        422.2893616112114,
+        434.00902358598444
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "positive_prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 1007
+        },
+        {
+          "label": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": 1008
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": 1009
+        },
+        {
+          "label": "sampler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "label": "scheduler",
+          "name": "scheduler_1",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler_1"
+          },
+          "link": null
+        },
+        {
+          "label": "image_1",
+          "name": "images.image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1010
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1011,
+            1017
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.36.0",
+        "previewExposures": []
+      },
+      "widgets_values": [
+        "",
+        1536,
+        25,
+        1024,
+        1024,
+        "res_2m",
+        "beta",
+        42,
+        "qwen/qwen_image_2.1_bf16.safetensors",
+        "qwen/qwen3vl_8b_bf16.safetensors",
+        "qwen/qwen_image_2.1_vae_bf16.safetensors"
+      ],
+      "widgets_values_named": {
+        "prompt": "",
+        "resolution": 1536,
+        "steps": 25,
+        "width": 1024,
+        "height": 1024,
+        "scheduler": "res_2m",
+        "scheduler_1": "beta",
+        "seed": 42,
+        "unet_name": "qwen/qwen_image_2.1_bf16.safetensors",
+        "clip_name": "qwen/qwen3vl_8b_bf16.safetensors",
+        "vae_name": "qwen/qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    {
+      "id": 579,
+      "type": "SaveImageAdvanced",
+      "pos": [
+        1120.0574490218758,
+        2593.8400534128887
+      ],
+      "size": [
+        710,
+        760
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 1011
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.36.0",
+        "Node name for S&R": "SaveImageAdvanced"
+      },
+      "widgets_values": [
+        "Content/Qwen/Character_Sheet/Simplify",
+        "png",
+        "8-bit",
+        "sRGB"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "Content/Qwen/Character_Sheet/Simplify",
+        "format": "png",
+        "format.bit_depth": "8-bit",
+        "format.input_color_space": "sRGB"
+      }
+    },
+    {
+      "id": 580,
+      "type": "LoadImage",
+      "pos": [
+        -598.5491962821536,
+        2597.382654652919
+      ],
+      "size": [
+        429.8978020595171,
+        465.253014605293
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "reference_image",
+          "name": "image",
+          "type": "COMBO",
+          "widget": {
+            "name": "image"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1012,
+            1016
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.36.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "ComfyUI_00251_.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "ComfyUI_00251_.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 581,
+      "type": "ImageResizeKJv2",
+      "pos": [
+        -138.42670834930163,
+        2595.7720237237054
+      ],
+      "size": [
+        270,
+        336
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1012
+        },
+        {
+          "name": "mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1010,
+            1013
+          ]
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "d3cfe21625e5170126ce06fbfcfe1d88108688c3",
+        "Node name for S&R": "ImageResizeKJv2"
+      },
+      "widgets_values": [
+        1536,
+        1536,
+        "lanczos",
+        "total_pixels",
+        "0, 0, 0",
+        "center",
+        8,
+        "gpu"
+      ],
+      "widgets_values_named": {
+        "width": 1536,
+        "height": 1536,
+        "upscale_method": "lanczos",
+        "keep_proportion": "total_pixels",
+        "pad_color": "0, 0, 0",
+        "crop_position": "center",
+        "divisible_by": 8,
+        "device": "gpu"
+      }
+    },
+    {
+      "id": 582,
+      "type": "7156bd05-9291-46df-8053-b02d1f088ec6",
+      "pos": [
+        193.97762894015204,
+        2594.6309208073035
+      ],
+      "size": [
+        406.3432309837556,
+        266.00711151103326
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1013
+        },
+        {
+          "label": "character_description",
+          "name": "string_b",
+          "type": "STRING",
+          "widget": {
+            "name": "string_b"
+          },
+          "link": 1014
+        },
+        {
+          "label": "temperature",
+          "name": "sampling_mode.temperature",
+          "type": "FLOAT",
+          "widget": {
+            "name": "sampling_mode.temperature"
+          },
+          "link": null
+        },
+        {
+          "label": "seed",
+          "name": "sampling_mode.seed",
+          "type": "INT",
+          "widget": {
+            "name": "sampling_mode.seed"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            1015
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.37.0",
+        "previewExposures": []
+      },
+      "widgets_values": [
+        "",
+        "qwen/qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors",
+        32768,
+        0.8,
+        0
+      ],
+      "widgets_values_named": {
+        "string_b": "",
+        "clip_name": "qwen/qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors",
+        "max_length": 32768,
+        "sampling_mode.temperature": 0.8,
+        "sampling_mode.seed": 0
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 583,
+      "type": "PreviewAny",
+      "pos": [
+        192.33839605722346,
+        2933.4120799469256
+      ],
+      "size": [
+        407.6615984970009,
+        459.6649548370541
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 1015
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            1007
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.37.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 584,
+      "type": "MarkdownNote",
+      "pos": [
+        648.1113827066304,
+        3091.9959711179554
+      ],
+      "size": [
+        419.0404614730716,
+        288.78660707021027
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Recommendations for generation",
+      "properties": {},
+      "widgets_values": [
+        "### 1. **Use f32/f16/bf16 quanta for clip.** This helps achieve the highest quality and prompt accuracy. According to my tests, int8 and other quanta create significantly more artifacts, and image quality becomes significantly worse. **Don't skimp on your SSD space and install [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors).**\n\n*And yes, you can use Qwen Image 2.1 with any quantum model, starting from int8. Reducing the quantum of the main model has almost no impact on the final generation, unlike clip.*\n\n### 2. For better image quality and reduced artifacts, use `res_2m beta`. I haven't done extensive quality tests for each sampler and scheduler, but this combination worked best for me.\n\n### 3. You can increase the value of the 'resolution' parameter. This parameter allows the clip model to better capture fine details in the reference image by reducing the processing speed of conditioning. The best balance is achieved with a value of 1536."
+      ],
+      "widgets_values_named": {
+        "text": "### 1. **Use f32/f16/bf16 quanta for clip.** This helps achieve the highest quality and prompt accuracy. According to my tests, int8 and other quanta create significantly more artifacts, and image quality becomes significantly worse. **Don't skimp on your SSD space and install [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors).**\n\n*And yes, you can use Qwen Image 2.1 with any quantum model, starting from int8. Reducing the quantum of the main model has almost no impact on the final generation, unlike clip.*\n\n### 2. For better image quality and reduced artifacts, use `res_2m beta`. I haven't done extensive quality tests for each sampler and scheduler, but this combination worked best for me.\n\n### 3. You can increase the value of the 'resolution' parameter. This parameter allows the clip model to better capture fine details in the reference image by reducing the processing speed of conditioning. The best balance is achieved with a value of 1536."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 585,
+      "type": "MarkdownNote",
+      "pos": [
+        -144.12161465440863,
+        3311.4291613400783
+      ],
+      "size": [
+        267.25180810410893,
+        110.61688401201403
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Recommended resolution",
+      "properties": {},
+      "widgets_values": [
+        "- 1.0 megapixels - Fast\n- 3.4 megapixels - Balanced\n- 6.0 megapixels - Best Quality"
+      ],
+      "widgets_values_named": {
+        "text": "- 1.0 megapixels - Fast\n- 3.4 megapixels - Balanced\n- 6.0 megapixels - Best Quality"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 586,
+      "type": "MarkdownNote",
+      "pos": [
+        193.22881355147138,
+        2374.810025202991
+      ],
+      "size": [
+        404.1646687726717,
+        174.69091797493272
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "About Prompt Maker",
+      "properties": {},
+      "widgets_values": [
+        "The PE model is prone to a lot of thought—this helps it build high-quality prompts. This causes the issue of insufficient context window. Set max_tokens and ctx to 32768 tokens to avoid errors due to insufficient context window.\nIf, like me, you're having trouble running PE without enough VRAM, change the gpu_laters value to anything else. The lower the value, the more VRAM is freed up for other tasks. For my device (8GB VRAM), I set it to 26.\n\n---\n\nIf you don't want to use ComfyUI Qwen 3.5 PE to generate the hint, you can go to this subgraph and replace the \"Generate Text\" node with any other one."
+      ],
+      "widgets_values_named": {
+        "text": "The PE model is prone to a lot of thought—this helps it build high-quality prompts. This causes the issue of insufficient context window. Set max_tokens and ctx to 32768 tokens to avoid errors due to insufficient context window.\nIf, like me, you're having trouble running PE without enough VRAM, change the gpu_laters value to anything else. The lower the value, the more VRAM is freed up for other tasks. For my device (8GB VRAM), I set it to 26.\n\n---\n\nIf you don't want to use ComfyUI Qwen 3.5 PE to generate the hint, you can go to this subgraph and replace the \"Generate Text\" node with any other one."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 587,
+      "type": "ImageStitch",
+      "pos": [
+        1558.7054175365454,
+        2357.208564751725
+      ],
+      "size": [
+        270,
+        150
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "showAdvanced": true,
+      "inputs": [
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 1016
+        },
+        {
+          "name": "image2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1017
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1018
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.37.0",
+        "Node name for S&R": "ImageStitch"
+      },
+      "widgets_values": [
+        "right",
+        true,
+        16,
+        "black"
+      ],
+      "widgets_values_named": {
+        "direction": "right",
+        "match_image_size": true,
+        "spacing_width": 16,
+        "spacing_color": "black"
+      }
+    },
+    {
+      "id": 588,
+      "type": "PreviewImage",
+      "pos": [
+        1864.5761529722033,
+        2589.6550924588328
+      ],
+      "size": [
+        924.5922806559618,
+        762.2012090112747
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 1018
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.37.0",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 589,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -597.0171018032268,
+        3106.991490911316
+      ],
+      "size": [
+        426.85413115009527,
+        396.49111069003163
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "character_description",
+          "name": "value",
+          "type": "STRING",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            1014
+          ]
+        }
+      ],
+      "title": "Character Description (Optional)",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.37.0",
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Ayaka is a dreamy, fragile teenage girl with a slender, graceful frame and fair, porcelain skin. Her figure is slender, with slender arms and legs and a small bust, accentuating her youth. Long black hair with vibrant rainbow highlights falls past her shoulders, framing a face with soft features and large amber eyes. She wears a loose, oversized white shirt that conceals her curves, a short, dark pleated skirt, white mid-calf socks, and chunky white sneakers, creating a contrast between her fragility and her voluminous clothing."
+      ],
+      "widgets_values_named": {
+        "value": "Ayaka is a dreamy, fragile teenage girl with a slender, graceful frame and fair, porcelain skin. Her figure is slender, with slender arms and legs and a small bust, accentuating her youth. Long black hair with vibrant rainbow highlights falls past her shoulders, framing a face with soft features and large amber eyes. She wears a loose, oversized white shirt that conceals her curves, a short, dark pleated skirt, white mid-calf socks, and chunky white sneakers, creating a contrast between her fragility and her voluminous clothing."
+      }
+    },
+    {
+      "id": 590,
+      "type": "MarkdownNote",
+      "pos": [
+        -1035.6694460742572,
+        3109.0552110187423
+      ],
+      "size": [
+        412.03066160437896,
+        194.17069631535415
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "About Character Description",
+      "properties": {},
+      "widgets_values": [
+        "This parameter is optional and serves to describe the character—their personality, habits, what they usually do, their history, etc. This way, PE will know much more about your character and will be able to produce a result that is much more consistent with your wishes.\nPE never completes your image – if your character isn't shown in full height, PE won't complete it automatically. However, there is an exception: if you include body characteristics in the character description parameter, PE will be able to determine and complete your final prompt. You can find usage examples on this workflow's page on CivitAI."
+      ],
+      "widgets_values_named": {
+        "text": "This parameter is optional and serves to describe the character—their personality, habits, what they usually do, their history, etc. This way, PE will know much more about your character and will be able to produce a result that is much more consistent with your wishes.\nPE never completes your image – if your character isn't shown in full height, PE won't complete it automatically. However, there is an exception: if you include body characteristics in the character description parameter, PE will be able to determine and complete your final prompt. You can find usage examples on this workflow's page on CivitAI."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 594,
+      "type": "MarkdownNote",
+      "pos": [
+        -1091.549111458042,
+        2357.0056235963193
+      ],
+      "size": [
+        467.73620766484567,
+        691.0586325270554
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## About this Workflow\nThis workflow allows you to generate detailed **Character Design Sheets** from a single reference image. These sheets can later be used as reference frameworks for video generation models like **Seedance 2.5** or **MiniMax Hailuo H3**.\n\nIn my experience, Qwen Image 2.1 is the first open-source image editing model capable of natively generating clean, highly detailed character design sheets right out of the box.\n\n## Recommended Settings\n- **CLIP Encoder:** Use **FP32 / FP16 / BF16** precision for maximum image quality and prompt adherence. Tests show that INT8 and other lower-bit quantizations introduce noticeable artifacts and reduce image clarity. **Don't skimp on SSD space — install [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors)**.\n- **Sampler & Scheduler:** Use **res_2m + beta** to reduce artifacts and improve detail. While I haven't run extensive benchmarks on every combination, this pairing yielded the best results.\n- **Resolution (Megapixels):**\n  - **3.4 MP** — Sweet spot for speed and clarity.\n  - **6.0 MP** — Superior quality and detail, though generation time increases significantly.\n\n## How to Use\n1. **Install custom nodes** via ComfyUI Manager:\n   - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)\n   - [ComfyUI-DeGrid](https://github.com/lunaaispace-eng/ComfyUI-DeGrid)\n   - [ComfyUI-ThinkingLLM](https://github.com/goodguy1963/ComfyUI-ThinkingLLM) *If you don't want to use GGUF PE, you can skip installing this node and use workflow. `Character_Sheet_Simplify_native_pe.json`*.\n2. **Download GGUF PE I2I weights** and place them into `ComfyUI/models/LLM/GGUF/`.  \n   > **Important:** Both the **main PE model and the mmproj file** must be present in this folder, otherwise `ComfyUI-ThinkingLLM` will not detect it.\n3. **Run generation:** Load your reference image, select the path to the PE model, and start generating.\n\n## Useful Resources\n- **Official Qwen Image 2.1 Weight for ComfyUI:** [HuggingFace](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)\n- **GGUF PE T2I:** [HuggingFace](https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-T2I-GGUF) | **GGUF PE I2I:** [HuggingFace](https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-I2I-GGUF)"
+      ],
+      "widgets_values_named": {
+        "text": "## About this Workflow\nThis workflow allows you to generate detailed **Character Design Sheets** from a single reference image. These sheets can later be used as reference frameworks for video generation models like **Seedance 2.5** or **MiniMax Hailuo H3**.\n\nIn my experience, Qwen Image 2.1 is the first open-source image editing model capable of natively generating clean, highly detailed character design sheets right out of the box.\n\n## Recommended Settings\n- **CLIP Encoder:** Use **FP32 / FP16 / BF16** precision for maximum image quality and prompt adherence. Tests show that INT8 and other lower-bit quantizations introduce noticeable artifacts and reduce image clarity. **Don't skimp on SSD space — install [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors)**.\n- **Sampler & Scheduler:** Use **res_2m + beta** to reduce artifacts and improve detail. While I haven't run extensive benchmarks on every combination, this pairing yielded the best results.\n- **Resolution (Megapixels):**\n  - **3.4 MP** — Sweet spot for speed and clarity.\n  - **6.0 MP** — Superior quality and detail, though generation time increases significantly.\n\n## How to Use\n1. **Install custom nodes** via ComfyUI Manager:\n   - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)\n   - [ComfyUI-DeGrid](https://github.com/lunaaispace-eng/ComfyUI-DeGrid)\n   - [ComfyUI-ThinkingLLM](https://github.com/goodguy1963/ComfyUI-ThinkingLLM) *If you don't want to use GGUF PE, you can skip installing this node and use workflow. `Character_Sheet_Simplify_native_pe.json`*.\n2. **Download GGUF PE I2I weights** and place them into `ComfyUI/models/LLM/GGUF/`.  \n   > **Important:** Both the **main PE model and the mmproj file** must be present in this folder, otherwise `ComfyUI-ThinkingLLM` will not detect it.\n3. **Run generation:** Load your reference image, select the path to the PE model, and start generating.\n\n## Useful Resources\n- **Official Qwen Image 2.1 Weight for ComfyUI:** [HuggingFace](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)\n- **GGUF PE T2I:** [HuggingFace](https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-T2I-GGUF) | **GGUF PE I2I:** [HuggingFace](https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-I2I-GGUF)"
+      },
+      "color": "#223",
+      "bgcolor": "#335"
+    }
+  ],
+  "links": [
+    [
+      1007,
+      583,
+      0,
+      578,
+      0,
+      "STRING"
+    ],
+    [
+      1008,
+      577,
+      0,
+      578,
+      2,
+      "INT"
+    ],
+    [
+      1009,
+      577,
+      1,
+      578,
+      3,
+      "INT"
+    ],
+    [
+      1010,
+      581,
+      0,
+      578,
+      6,
+      "IMAGE"
+    ],
+    [
+      1012,
+      580,
+      0,
+      581,
+      0,
+      "IMAGE"
+    ],
+    [
+      1015,
+      582,
+      0,
+      583,
+      0,
+      "STRING"
+    ],
+    [
+      1016,
+      580,
+      0,
+      587,
+      0,
+      "IMAGE"
+    ],
+    [
+      1017,
+      578,
+      0,
+      587,
+      1,
+      "IMAGE"
+    ],
+    [
+      1018,
+      587,
+      0,
+      588,
+      0,
+      "IMAGE"
+    ],
+    [
+      1013,
+      581,
+      0,
+      582,
+      0,
+      "IMAGE"
+    ],
+    [
+      1014,
+      589,
+      0,
+      582,
+      1,
+      "STRING"
+    ],
+    [
+      1011,
+      578,
+      0,
+      579,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "99ba1998-bf35-4a70-b4e7-47d3c8f10d3d",
+        "version": 1,
+        "state": {
+          "lastGroupId": 39,
+          "lastNodeId": 597,
+          "lastLinkId": 1031,
+          "lastRerouteId": 10
+        },
+        "revision": 0,
+        "config": {},
+        "name": "Image Edit (Qwen Image 2.1)",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            -720,
+            630,
+            138.68333435058594,
+            288
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            1960,
+            640,
+            128,
+            68
+          ]
+        },
+        "inputs": [
+          {
+            "id": "6a73de3b-f4cd-43a4-9076-76648c6902f0",
+            "name": "prompt",
+            "type": "STRING",
+            "linkIds": [
+              974
+            ],
+            "localized_name": "prompt",
+            "label": "positive_prompt",
+            "pos": [
+              -605.3166656494141,
+              654
+            ]
+          },
+          {
+            "id": "1f3911c3-71b5-45b7-9a0e-4ac7285069dc",
+            "name": "resolution",
+            "type": "INT",
+            "linkIds": [
+              973
+            ],
+            "pos": [
+              -605.3166656494141,
+              674
+            ]
+          },
+          {
+            "id": "349c3f72-ba7a-4277-84ff-8029faa16019",
+            "name": "steps",
+            "type": "INT",
+            "linkIds": [
+              659
+            ],
+            "label": "steps",
+            "pos": [
+              -605.3166656494141,
+              694
+            ]
+          },
+          {
+            "id": "91c96cf8-057b-4da2-b71e-305541a3527e",
+            "name": "width",
+            "type": "INT",
+            "linkIds": [
+              660
+            ],
+            "localized_name": "width",
+            "pos": [
+              -605.3166656494141,
+              714
+            ]
+          },
+          {
+            "id": "661cc520-6bd0-4925-90ec-cecaa188b57d",
+            "name": "height",
+            "type": "INT",
+            "linkIds": [
+              661
+            ],
+            "localized_name": "height",
+            "pos": [
+              -605.3166656494141,
+              734
+            ]
+          },
+          {
+            "id": "9f0e91b8-5a4a-4f5a-a2a4-4ddc180df0fd",
+            "name": "scheduler",
+            "type": "COMBO",
+            "linkIds": [
+              662
+            ],
+            "label": "sampler",
+            "pos": [
+              -605.3166656494141,
+              754
+            ]
+          },
+          {
+            "id": "4710583f-3cb0-4091-87ab-dadd8a2e657c",
+            "name": "scheduler_1",
+            "type": "COMBO",
+            "linkIds": [
+              668
+            ],
+            "label": "scheduler",
+            "pos": [
+              -605.3166656494141,
+              774
+            ]
+          },
+          {
+            "id": "977ce57d-3764-491c-8d2d-543754cfbaf1",
+            "name": "seed",
+            "type": "INT",
+            "linkIds": [
+              667
+            ],
+            "pos": [
+              -605.3166656494141,
+              794
+            ]
+          },
+          {
+            "id": "143494fb-a40e-423f-be3b-ecc808b408b0",
+            "name": "unet_name",
+            "type": "COMBO",
+            "linkIds": [
+              663
+            ],
+            "pos": [
+              -605.3166656494141,
+              814
+            ]
+          },
+          {
+            "id": "d8528289-e121-45ed-9c31-e6370ce4ba5e",
+            "name": "clip_name",
+            "type": "COMBO",
+            "linkIds": [
+              664
+            ],
+            "pos": [
+              -605.3166656494141,
+              834
+            ]
+          },
+          {
+            "id": "f03d1fb0-d592-4997-b55e-e7a2549c36e5",
+            "name": "vae_name",
+            "type": "COMBO",
+            "linkIds": [
+              665
+            ],
+            "pos": [
+              -605.3166656494141,
+              854
+            ]
+          },
+          {
+            "id": "6bbe4c8a-0ce9-4576-9468-697a165b98b4",
+            "name": "images.image_1",
+            "type": "IMAGE",
+            "linkIds": [
+              977
+            ],
+            "label": "image_1",
+            "pos": [
+              -605.3166656494141,
+              874
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f6f3effc-0961-4c17-b52c-a77c16ca6aa4",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "linkIds": [
+              742
+            ],
+            "localized_name": "IMAGE",
+            "pos": [
+              1984,
+              664
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 451,
+            "type": "UNETLoader",
+            "pos": [
+              -190,
+              410
+            ],
+            "size": [
+              510,
+              90
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "unet_name",
+                "name": "unet_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "unet_name"
+                },
+                "link": 663
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  996
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "UNETLoader",
+              "models": [
+                {
+                  "name": "qwen_image_2.1_int8_convrot.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+                  "directory": "diffusion_models"
+                }
+              ]
+            },
+            "widgets_values": [
+              "qwen_image_2.1_int8_convrot.safetensors",
+              "default"
+            ],
+            "widgets_values_named": {
+              "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+              "weight_dtype": "default"
+            }
+          },
+          {
+            "id": 453,
+            "type": "CLIPLoader",
+            "pos": [
+              -190,
+              570
+            ],
+            "size": [
+              510,
+              120
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "clip_name",
+                "name": "clip_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "clip_name"
+                },
+                "link": 664
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "CLIP",
+                "name": "CLIP",
+                "type": "CLIP",
+                "links": [
+                  976
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "CLIPLoader",
+              "models": [
+                {
+                  "name": "qwen3vl_8b_bf16.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors",
+                  "directory": "text_encoders"
+                }
+              ]
+            },
+            "widgets_values": [
+              "qwen3vl_8b_bf16.safetensors",
+              "qwen_image",
+              "default"
+            ],
+            "widgets_values_named": {
+              "clip_name": "qwen3vl_8b_bf16.safetensors",
+              "type": "qwen_image",
+              "device": "default"
+            }
+          },
+          {
+            "id": 454,
+            "type": "VAELoader",
+            "pos": [
+              -190,
+              770
+            ],
+            "size": [
+              510,
+              70
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "vae_name",
+                "name": "vae_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "vae_name"
+                },
+                "link": 665
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "links": [
+                  649,
+                  978
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "VAELoader",
+              "models": [
+                {
+                  "name": "qwen_image_2.1_vae_bf16.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+                  "directory": "vae"
+                }
+              ]
+            },
+            "widgets_values": [
+              "qwen_image_2.1_vae_bf16.safetensors"
+            ],
+            "widgets_values_named": {
+              "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+            }
+          },
+          {
+            "id": 456,
+            "type": "EmptyLatentImage",
+            "pos": [
+              -70,
+              1010
+            ],
+            "size": [
+              300,
+              120
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "width",
+                "name": "width",
+                "type": "INT",
+                "widget": {
+                  "name": "width"
+                },
+                "link": 660
+              },
+              {
+                "localized_name": "height",
+                "name": "height",
+                "type": "INT",
+                "widget": {
+                  "name": "height"
+                },
+                "link": 661
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "LATENT",
+                "name": "LATENT",
+                "type": "LATENT",
+                "links": [
+                  972
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "EmptyLatentImage"
+            },
+            "widgets_values": [
+              1024,
+              1024,
+              1
+            ],
+            "widgets_values_named": {
+              "width": 1024,
+              "height": 1024,
+              "batch_size": 1
+            }
+          },
+          {
+            "id": 457,
+            "type": "VAEDecode",
+            "pos": [
+              1620,
+              660
+            ],
+            "size": [
+              230,
+              60
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "samples",
+                "name": "samples",
+                "type": "LATENT",
+                "link": 651
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "type": "VAE",
+                "link": 649
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "IMAGE",
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  741
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "VAEDecode"
+            }
+          },
+          {
+            "id": 458,
+            "type": "KSampler",
+            "pos": [
+              1180,
+              640
+            ],
+            "size": [
+              270,
+              270
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 689
+              },
+              {
+                "localized_name": "positive",
+                "name": "positive",
+                "type": "CONDITIONING",
+                "link": 979
+              },
+              {
+                "localized_name": "negative",
+                "name": "negative",
+                "type": "CONDITIONING",
+                "link": 980
+              },
+              {
+                "localized_name": "latent_image",
+                "name": "latent_image",
+                "type": "LATENT",
+                "link": 972
+              },
+              {
+                "localized_name": "seed",
+                "name": "seed",
+                "type": "INT",
+                "widget": {
+                  "name": "seed"
+                },
+                "link": 667
+              },
+              {
+                "localized_name": "steps",
+                "name": "steps",
+                "type": "INT",
+                "widget": {
+                  "name": "steps"
+                },
+                "link": 659
+              },
+              {
+                "localized_name": "sampler_name",
+                "name": "sampler_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "sampler_name"
+                },
+                "link": 662
+              },
+              {
+                "localized_name": "scheduler",
+                "name": "scheduler",
+                "type": "COMBO",
+                "widget": {
+                  "name": "scheduler"
+                },
+                "link": 668
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "LATENT",
+                "name": "LATENT",
+                "type": "LATENT",
+                "links": [
+                  651
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "KSampler"
+            },
+            "widgets_values": [
+              0,
+              "fixed",
+              25,
+              1,
+              "euler",
+              "simple",
+              1
+            ],
+            "widgets_values_named": {
+              "seed": 0,
+              "control_after_generate": "fixed",
+              "steps": 25,
+              "cfg": 1,
+              "sampler_name": "euler",
+              "scheduler": "simple",
+              "denoise": 1
+            }
+          },
+          {
+            "id": 469,
+            "type": "QwenImage21Cache",
+            "pos": [
+              1180,
+              460
+            ],
+            "size": [
+              270,
+              90
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 730
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  689
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "QwenImage21Cache"
+            },
+            "widgets_values": [
+              "auto",
+              "default"
+            ],
+            "widgets_values_named": {
+              "device": "auto",
+              "dtype": "default"
+            }
+          },
+          {
+            "id": 476,
+            "type": "ModelAttentionBackend",
+            "pos": [
+              1186.6907894736844,
+              174.92982456140354
+            ],
+            "size": [
+              270,
+              58
+            ],
+            "flags": {},
+            "order": 7,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 996
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "links": [
+                  730
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "ModelAttentionBackend"
+            },
+            "widgets_values": [
+              "comfy kitchen attention"
+            ],
+            "widgets_values_named": {
+              "attention": "comfy kitchen attention"
+            }
+          },
+          {
+            "id": 484,
+            "type": "VAEDeGrid",
+            "pos": [
+              1589.954387490791,
+              801.0614035087723
+            ],
+            "size": [
+              284.84999694824216,
+              198
+            ],
+            "flags": {},
+            "order": 8,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "link": 741
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "links": [
+                  742
+                ]
+              },
+              {
+                "localized_name": "removed_grid",
+                "name": "removed_grid",
+                "type": "IMAGE",
+                "links": null
+              }
+            ],
+            "properties": {
+              "aux_id": "lunaaispace-eng/ComfyUI-DeGrid",
+              "ver": "5699bc33f71e1be12523fdea105cc9c2abfe1cd0",
+              "Node name for S&R": "VAEDeGrid"
+            },
+            "widgets_values": [
+              true,
+              "auto",
+              0.02,
+              true,
+              10,
+              "4x zoom"
+            ],
+            "widgets_values_named": {
+              "enabled": true,
+              "mode": "auto",
+              "limit": 0.02,
+              "skip_when_clean": true,
+              "grid_gain": 10,
+              "grid_view": "4x zoom"
+            }
+          },
+          {
+            "id": 557,
+            "type": "TextEncodeQwenImage21",
+            "pos": [
+              506.61230910680064,
+              602.8646523635018
+            ],
+            "size": [
+              460,
+              286
+            ],
+            "flags": {},
+            "order": 9,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "clip",
+                "name": "clip",
+                "type": "CLIP",
+                "link": 976
+              },
+              {
+                "localized_name": "image_1",
+                "name": "images.image_1",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 977
+              },
+              {
+                "localized_name": "image_2",
+                "name": "images.image_2",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "image_3",
+                "name": "images.image_3",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "image_4",
+                "name": "images.image_4",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "shape": 7,
+                "type": "VAE",
+                "link": 978
+              },
+              {
+                "localized_name": "prompt",
+                "name": "prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "prompt"
+                },
+                "link": 974
+              },
+              {
+                "localized_name": "resolution",
+                "name": "resolution",
+                "type": "INT",
+                "widget": {
+                  "name": "resolution"
+                },
+                "link": 973
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "positive",
+                "name": "positive",
+                "type": "CONDITIONING",
+                "links": [
+                  979
+                ]
+              },
+              {
+                "localized_name": "negative",
+                "name": "negative",
+                "type": "CONDITIONING",
+                "links": [
+                  980
+                ]
+              },
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "type": "LATENT",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.36.0",
+              "Node name for S&R": "TextEncodeQwenImage21"
+            },
+            "widgets_values": [
+              "",
+              "",
+              1024
+            ],
+            "widgets_values_named": {
+              "prompt": "",
+              "negative_prompt": "",
+              "resolution": 1024
+            }
+          }
+        ],
+        "groups": [
+          {
+            "id": 34,
+            "title": "Models",
+            "bounding": [
+              -200,
+              300,
+              530,
+              590
+            ],
+            "color": "#3f789e",
+            "flags": {}
+          },
+          {
+            "id": 35,
+            "title": "Image Size",
+            "bounding": [
+              -200,
+              920,
+              530,
+              250
+            ],
+            "color": "#3f789e",
+            "flags": {}
+          },
+          {
+            "id": 36,
+            "title": "Conditioning",
+            "bounding": [
+              360,
+              300,
+              700,
+              860
+            ],
+            "color": "#3f789e",
+            "flags": {}
+          },
+          {
+            "id": 37,
+            "title": "Sampling",
+            "bounding": [
+              1090,
+              300,
+              470,
+              860
+            ],
+            "color": "#3f789e",
+            "flags": {}
+          }
+        ],
+        "links": [
+          {
+            "id": 649,
+            "origin_id": 454,
+            "origin_slot": 0,
+            "target_id": 457,
+            "target_slot": 1,
+            "type": "VAE"
+          },
+          {
+            "id": 651,
+            "origin_id": 458,
+            "origin_slot": 0,
+            "target_id": 457,
+            "target_slot": 0,
+            "type": "LATENT"
+          },
+          {
+            "id": 689,
+            "origin_id": 469,
+            "origin_slot": 0,
+            "target_id": 458,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 730,
+            "origin_id": 476,
+            "origin_slot": 0,
+            "target_id": 469,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 741,
+            "origin_id": 457,
+            "origin_slot": 0,
+            "target_id": 484,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 742,
+            "origin_id": 484,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 972,
+            "origin_id": 456,
+            "origin_slot": 0,
+            "target_id": 458,
+            "target_slot": 3,
+            "type": "LATENT"
+          },
+          {
+            "id": 979,
+            "origin_id": 557,
+            "origin_slot": 0,
+            "target_id": 458,
+            "target_slot": 1,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 980,
+            "origin_id": 557,
+            "origin_slot": 1,
+            "target_id": 458,
+            "target_slot": 2,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 659,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 458,
+            "target_slot": 5,
+            "type": "INT"
+          },
+          {
+            "id": 660,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 456,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 661,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 456,
+            "target_slot": 1,
+            "type": "INT"
+          },
+          {
+            "id": 667,
+            "origin_id": -10,
+            "origin_slot": 7,
+            "target_id": 458,
+            "target_slot": 4,
+            "type": "INT"
+          },
+          {
+            "id": 663,
+            "origin_id": -10,
+            "origin_slot": 8,
+            "target_id": 451,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 664,
+            "origin_id": -10,
+            "origin_slot": 9,
+            "target_id": 453,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 665,
+            "origin_id": -10,
+            "origin_slot": 10,
+            "target_id": 454,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 996,
+            "origin_id": 451,
+            "origin_slot": 0,
+            "target_id": 476,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 662,
+            "origin_id": -10,
+            "origin_slot": 5,
+            "target_id": 458,
+            "target_slot": 6,
+            "type": "COMBO"
+          },
+          {
+            "id": 668,
+            "origin_id": -10,
+            "origin_slot": 6,
+            "target_id": 458,
+            "target_slot": 7,
+            "type": "COMBO"
+          },
+          {
+            "id": 976,
+            "origin_id": 453,
+            "origin_slot": 0,
+            "target_id": 557,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 977,
+            "origin_id": -10,
+            "origin_slot": 11,
+            "target_id": 557,
+            "target_slot": 1,
+            "type": "IMAGE"
+          },
+          {
+            "id": 978,
+            "origin_id": 454,
+            "origin_slot": 0,
+            "target_id": 557,
+            "target_slot": 5,
+            "type": "VAE"
+          },
+          {
+            "id": 974,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 557,
+            "target_slot": 6,
+            "type": "STRING"
+          },
+          {
+            "id": 973,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 557,
+            "target_slot": 7,
+            "type": "INT"
+          }
+        ],
+        "extra": {}
+      },
+      {
+        "id": "7156bd05-9291-46df-8053-b02d1f088ec6",
+        "version": 1,
+        "state": {
+          "lastGroupId": 39,
+          "lastNodeId": 597,
+          "lastLinkId": 1031,
+          "lastRerouteId": 10
+        },
+        "revision": 0,
+        "config": {},
+        "name": "Character Sheet Prompt Maker",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            16.548033080436472,
+            4508.573238635586,
+            171.11666870117188,
+            168
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            1551.66287947893,
+            4420.756757978995,
+            128,
+            68
+          ]
+        },
+        "inputs": [
+          {
+            "id": "4f0e9ff2-efb9-476e-a8de-9aa12a2db938",
+            "name": "image",
+            "type": "IMAGE",
+            "linkIds": [
+              1021
+            ],
+            "localized_name": "image",
+            "shape": 7,
+            "pos": [
+              163.66470178160836,
+              4532.573238635586
+            ]
+          },
+          {
+            "id": "a7226736-b59d-4330-aa53-3c7f0eb619af",
+            "name": "string_b",
+            "type": "STRING",
+            "linkIds": [
+              999
+            ],
+            "label": "character_description",
+            "pos": [
+              163.66470178160836,
+              4552.573238635586
+            ]
+          },
+          {
+            "id": "0eaa1b18-2f11-4558-a542-97af548f49fe",
+            "name": "clip_name",
+            "type": "COMBO",
+            "linkIds": [
+              1028
+            ],
+            "pos": [
+              163.66470178160836,
+              4572.573238635586
+            ]
+          },
+          {
+            "id": "3aedceb6-c074-47ce-b18d-99472c7f8908",
+            "name": "max_length",
+            "type": "INT",
+            "linkIds": [
+              1029
+            ],
+            "pos": [
+              163.66470178160836,
+              4592.573238635586
+            ]
+          },
+          {
+            "id": "2d36e6fb-180c-4c1d-993a-25ab46491f51",
+            "name": "sampling_mode.temperature",
+            "type": "FLOAT",
+            "linkIds": [
+              1030
+            ],
+            "label": "temperature",
+            "pos": [
+              163.66470178160836,
+              4612.573238635586
+            ]
+          },
+          {
+            "id": "828615f3-0647-4d6b-b012-49b88c03086b",
+            "name": "sampling_mode.seed",
+            "type": "INT",
+            "linkIds": [
+              1031
+            ],
+            "label": "seed",
+            "pos": [
+              163.66470178160836,
+              4632.573238635586
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "d3c1a46e-bbaa-4967-a844-6138754af0cd",
+            "name": "prompt",
+            "type": "STRING",
+            "linkIds": [
+              1027
+            ],
+            "pos": [
+              1575.66287947893,
+              4444.756757978995
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 478,
+            "type": "PrimitiveStringMultiline",
+            "pos": [
+              296.92087799659976,
+              4060.4388379917564
+            ],
+            "size": [
+              611.4970003619597,
+              902.4029407867911
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  998
+                ]
+              }
+            ],
+            "title": "Prompt Template (Important)",
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.30.0",
+              "Node name for S&R": "PrimitiveStringMultiline",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "# ROLE\nYou are the Simple Character Sheet Prompt Architect. Input: (1) ONE reference image, (2) entity name, (3) optional free-text character description (personality, behavior, history). Output: ONE lean, production-ready sheet prompt for a diffusion image model that will receive your prompt together with the reference image. The sheet contains exactly two mandatory panels and one conditional panel, carries zero sheet typography, and invents zero content. Simple sheets are the goal: clarity over completeness. You never ask for facial expressions an entity cannot physically produce.\n\n## OUTPUT CONTRACT\n- Output ONLY the final prompt: numbered sections starting at \"1.\", each ONE continuous paragraph, no inner line breaks, no preamble, no markdown fences, no JSON.\n- Section order: (1) canvas and global style, (2) face/expression column, (3) turnaround row, (4) equipment macros — ONLY if triggered, then final preservation section. Number sequentially.\n- Descriptive prose: English.\n- Double quotes are reserved EXCLUSIVELY for diegetic text (text physically present on the character or equipment in the reference, or given verbatim by the user). Quote it exactly, in its original language and spelling. Never quote anything else. The sheet itself carries no labels, captions, headers, titles, or watermarks.\n- Density: 40–120 words per section, 250–600 words total.\n\n## STEP 0 — INPUT PARSE (internal; never output)\na) VISIBLE inventory: which body regions the reference actually shows (head, torso, arms, hands, hips, legs, feet); every visible garment, accessory, weapon, tool; diegetic text (legible → note exact string; illegible → note as unreadable pattern); rendering medium (anime, photoreal, 3D, painterly) — an invariant.\nb) DESCRIBED inventory: ONLY explicit user-text statements about body, outfit, or equipment (\"wears black boots\", \"carries a katana\"). Implications from profession, history, or personality NEVER count (an artist does not automatically own brushes).\nc) RENDER LIMIT = union of (a) and (b). Anything outside it is forbidden in every panel.\nd) PERSONALITY traits from user text, if any.\ne) Rendering medium of the reference — invariant across all panels.\nf) FACE CLASS — decide exactly one:\n   EXPRESSIVE_FACE: a living or humanoid face with muscular mimicry (humans, stylized characters, animals, creatures with readable brow/eye/mouth/ear movement). A partially visible face (mask or helmet with eye/mouth openings) also counts, but mimicry mechanics are then limited to the visible regions.\n   CHANNEL_FACE: no muscular face, but a visible expression channel exists IN THE REFERENCE: a display-screen face, emissive eye lamps, light patterns, or movable facial appendages (ear plates, antennae, slit shutters). The channel must be visibly present; never infer or add one.\n   NO_FACE: no face and no expression channel (vehicles, objects, faceless machines), or a rigid mask/helmet with no visible face or channel behind it. Such an entity has exactly ONE expression: the permanent state visible in the reference.\ng) Face identity facts: eye color and shape (or channel/mask design), brow set, hair color/cut/bangs/side locks, skin tone, markings, head accessories with their body side, asymmetries.\n\n## STEP 1 — PANEL PLAN\nPANEL 1 — FACE / EXPRESSION COLUMN (mandatory), content by FACE CLASS:\nTIER A (EXPRESSIVE_FACE): a vertical column of four front-facing head-and-shoulders close-ups at identical scale and identical crop. Slot 1 is always NEUTRAL (relaxed brows, naturally open eyes, closed relaxed mouth) as the identity anchor. Slots 2–4: three DISTINCT expressions from the canonical vocabulary, each written with its facial mechanics:\nJOY — raised cheeks, upward-curved smile, crinkled lower eyelids.\nLAUGH — open-mouth grin, curved closed happy eyes.\nANGER — brows drawn down and inward, narrowed eyes, pressed or tensely open mouth.\nSORROW — inner brows raised, drooping upper eyelids, downturned mouth corners.\nSURPRISE — raised brows, wide open eyes, dropped-jaw open mouth.\nFEAR — brows raised and pulled together, widened tense eyes, mouth open and stretched horizontally.\nDISGUST — wrinkled nose, raised upper lip, lowered brows.\nSMUG — one brow slightly raised, slight one-sided smile, steady direct gaze.\nSHY — downward averted gaze, faint cheek blush, small closed smile.\nDETERMINED — level firm brows, focused direct gaze, firmly closed mouth.\nFor non-humanoid faces (ANIMAL, CREATURE) express each named emotion through species-plausible mechanics — ear carriage, eye opening, muzzle and mouth posture — never human-style brow raises unless the face visibly has brows. For partially visible faces, change only the visible regions; the mask or helmet geometry stays identical in all four slots.\nSelection rule: if personality traits exist, pick the three that best embody them, including at least one positive-valence and one negative-or-tense expression for range (confident/leader → SMUG, DETERMINED, ANGER; shy/modest → SHY, JOY, SORROW; cheerful/playful → LAUGH, SURPRISE, JOY; calm/stoic → DETERMINED, ANGER, SORROW). If no personality text: default JOY, ANGER, SORROW. Only muscle state changes between slots; eye shape, brow set, hair, and markings stay identical.\nTIER B (CHANNEL_FACE): a vertical column of four front-facing head close-ups at identical scale and identical crop. The channel hardware (screen frame, lamp housings, shutter plates) stays exactly as in the reference in all four slots; only the channel CONTENT changes. Slot 1 is always IDLE: channel exactly as shown in the reference. Slots 2–4: three DISTINCT states from:\nPOSITIVE — upward-curved rounded channel geometry (arched happy eye shapes on the screen, softened warm emission).\nNEGATIVE — sharp downward-angled channel geometry (slanted eye shapes, narrowed shutters).\nALERT — widened enlarged channel geometry with brighter emission.\nSUBDUED — dimmed emission, half-lowered shutters or contracted iris apertures.\nEmissive color or intensity shifts are allowed ONLY if the channel is emissive in the reference. Selection: if personality traits exist, pick the three that best embody them; otherwise default POSITIVE, ALERT, NEGATIVE.\nTIER C (NO_FACE): Panel 1 is ONE single front-facing close-up tile of the head, front section, or most identity-critical region (mask, visor, grille, control surface), rendered exactly as in the reference, vertically centered in the column. The prompt must state explicitly: the entity has no facial mimicry; its single permanent expression is the reference state; do not animate, bend, or add any facial features, screens, eyes, or lights.\nPANEL 2 — TURNAROUND ROW (mandatory): three views at identical scale side by side: front, clean side profile (choose the side that reveals the character's defining asymmetry; if symmetric, left-facing), and back. Stance follows personality and is identical across the three views: confident/leader → upright spine, shoulders back, chin level; shy/modest → shoulders slightly inward, hands loosely clasped in front; cheerful/playful → relaxed weight on one leg; calm/stoic or no description → neutral relaxed arms at sides. For NO_FACE entities ignore personality stance and use the reference posture or a neutral static pose. Views render ONLY the RENDER LIMIT: if legs or feet are outside the limit, crop all three views at the SAME anatomical line where visibility/description ends, with a clean straight horizontal cut; never extrapolate hems, legs, or footwear. Soft oval ground contact shadows are allowed.\nPANEL 3 — EQUIPMENT MACROS (conditional): trigger iff at least one accessory, weapon, tool, or worn gear item exists in the VISIBLE or DESCRIBED inventory. If triggered: a horizontal row of macro close-ups, one tile per item (max six, ordered by identity importance: primary weapon/tool first, then worn accessories head→hands→belt), each item isolated on the plain sheet background in the orientation that best shows its design, with exact materials, colors, wear, and diegetic text quoted. If not triggered: the panel is absent and its space returns to Panel 2.\n\n## STEP 2 — CANVAS\nClean 3:2 landscape composition on a plain warm off-white background. With a four-tile column (Tier A or B): expression column x 0–20% full height; turnaround row x 20–100%, y 0–66% with equipment, else full height; equipment strip x 20–100%, y 66–100% when present. With Tier C: the single close-up tile fills the column width and is vertically centered at x 0–20%; all other zones unchanged. Panels separated by generous clean white space only — no frames, no borders, no divider lines, no labels, no captions, no headers, no watermark, no logo. Soft neutral even studio lighting across the whole sheet, identical in every tile of Panel 1. Rendering medium must match the reference exactly (line weight, shading method, texture); never switch medium between panels.\n\n## SECTION WRITING SPEC\nSection 1 — Canvas and global style: ratio, background, panel list with the coordinates above, white-space-only separation, the declaration that the sheet contains no rendered text of any kind except diegetic text on the character and equipment, and the medium-lock sentence.\nSection 2 — Face/expression column: state the tier implicitly through content. Tier A: column position; four stacked front-facing head-and-shoulders close-ups, identical scale and crop; slot order naming each expression with its facial mechanics; face identity lock (same eyes, brows, hair, markings in all four); identical lighting. Tier B: four head close-ups; slot 1 IDLE matching the reference channel exactly; slots 2–4 named channel states with their channel geometry; channel hardware identity lock. Tier C: one single close-up tile described as-is from the reference, plus the explicit no-mimicry sentence forbidding any animated or added facial features, screens, eyes, or lights.\nSection 3 — Turnaround row: row position; three identical-scale figures front/side/back; stance sentence; brief restatement of key design inside the RENDER LIMIT (hair or surface architecture, garment or hull colors and fit, accessories with their body side); the crop sentence stating the exact shared crop line, or \"full body from head to feet\" when the limit includes feet; contact shadows.\nSection 4 (conditional) — Equipment macros: strip position; one tile per item in importance order; per-item macro description (form, material, color, wear, diegetic text quoted; illegible print described as an unreadable pattern with no invented characters); identical tile scale; isolated on the sheet background.\nFinal section — Preservation and anti-invention: \"Preserve the exact visible design of <Name> from the reference image across all panels:\" then one \"same …\" clause per lock (hair or surface, eyes or channel or mask and their shape in every tile, accessories with exact side, markings, garments or hull parts within the limit). Mimicry honesty clause: the entity's expression count equals its physical capability — four facial expressions for EXPRESSIVE_FACE, four channel states for CHANNEL_FACE with unchanged channel hardware, exactly one permanent expression for NO_FACE; never add muscular faces to channel entities, never add expressions, screens, eyes, or lights to faceless entities. Commands: do not redesign, beautify, age-shift, or simplify; do not draw any body region, garment, or item outside the RENDER LIMIT; do not infer equipment from profession or history; keep handedness and asymmetry consistent; keep the reference medium throughout; diegetic text renders exactly as quoted and the sheet carries no other text. Negative block: no extra characters or objects, no identity/wardrobe/material drift, no inconsistent markings, no changed proportions, no missing or duplicated limbs within the limit, no merged views, no labels, captions, watermarks, or invented text, no invented facial animation on faceless entities.\n\n## GOVERNING RULES\n- Anchor every spatial, tonal, and material claim on the reference image or on explicit user text; if unsure a detail exists, omit it.\n- Mimicry honesty: never request expressions an entity cannot produce; FACE CLASS decides the panel content, not the entity's narrative role.\n- Personality influences ONLY expression or channel-state selection (Tier A/B) and stance (entities with a body); it is ignored entirely for NO_FACE entities and never grants a face, channel, equipment, or design element.\n- Identity invariants survive every panel: face or channel or mask identity, accessory side and count, markings, rendering medium.\n- Scale discipline: Panel 1 tiles identical scale; three turnaround figures identical scale; equipment tiles identical scale.\n- Only what was asked: sheet construction is the only operation; never clean up or improve the subject.\n\n## FINAL SELF-CHECK (internal, then output)\n(1) Sections numbered sequentially, equipment section present iff triggered? (2) FACE CLASS matches visible anatomy, and Panel 1 tile count equals the tier (4/4/1)? (3) Tier C prompt contains exactly one close-up and the explicit no-mimicry sentence? (4) Tier B channel exists visibly in the reference and its hardware is unchanged across slots? (5) Crop line identical in all three turnaround views and consistent with the RENDER LIMIT? (6) Every quoted string diegetic and exact; no other quotes? (7) No sheet labels, captions, or headers anywhere in the prompt? (8) Nothing inferred from profession or history? (9) Medium locked? If any check fails, rewrite internally, then emit ONLY the numbered sections.\n\n# USER\n"
+            ],
+            "widgets_values_named": {
+              "value": "# ROLE\nYou are the Simple Character Sheet Prompt Architect. Input: (1) ONE reference image, (2) entity name, (3) optional free-text character description (personality, behavior, history). Output: ONE lean, production-ready sheet prompt for a diffusion image model that will receive your prompt together with the reference image. The sheet contains exactly two mandatory panels and one conditional panel, carries zero sheet typography, and invents zero content. Simple sheets are the goal: clarity over completeness. You never ask for facial expressions an entity cannot physically produce.\n\n## OUTPUT CONTRACT\n- Output ONLY the final prompt: numbered sections starting at \"1.\", each ONE continuous paragraph, no inner line breaks, no preamble, no markdown fences, no JSON.\n- Section order: (1) canvas and global style, (2) face/expression column, (3) turnaround row, (4) equipment macros — ONLY if triggered, then final preservation section. Number sequentially.\n- Descriptive prose: English.\n- Double quotes are reserved EXCLUSIVELY for diegetic text (text physically present on the character or equipment in the reference, or given verbatim by the user). Quote it exactly, in its original language and spelling. Never quote anything else. The sheet itself carries no labels, captions, headers, titles, or watermarks.\n- Density: 40–120 words per section, 250–600 words total.\n\n## STEP 0 — INPUT PARSE (internal; never output)\na) VISIBLE inventory: which body regions the reference actually shows (head, torso, arms, hands, hips, legs, feet); every visible garment, accessory, weapon, tool; diegetic text (legible → note exact string; illegible → note as unreadable pattern); rendering medium (anime, photoreal, 3D, painterly) — an invariant.\nb) DESCRIBED inventory: ONLY explicit user-text statements about body, outfit, or equipment (\"wears black boots\", \"carries a katana\"). Implications from profession, history, or personality NEVER count (an artist does not automatically own brushes).\nc) RENDER LIMIT = union of (a) and (b). Anything outside it is forbidden in every panel.\nd) PERSONALITY traits from user text, if any.\ne) Rendering medium of the reference — invariant across all panels.\nf) FACE CLASS — decide exactly one:\n   EXPRESSIVE_FACE: a living or humanoid face with muscular mimicry (humans, stylized characters, animals, creatures with readable brow/eye/mouth/ear movement). A partially visible face (mask or helmet with eye/mouth openings) also counts, but mimicry mechanics are then limited to the visible regions.\n   CHANNEL_FACE: no muscular face, but a visible expression channel exists IN THE REFERENCE: a display-screen face, emissive eye lamps, light patterns, or movable facial appendages (ear plates, antennae, slit shutters). The channel must be visibly present; never infer or add one.\n   NO_FACE: no face and no expression channel (vehicles, objects, faceless machines), or a rigid mask/helmet with no visible face or channel behind it. Such an entity has exactly ONE expression: the permanent state visible in the reference.\ng) Face identity facts: eye color and shape (or channel/mask design), brow set, hair color/cut/bangs/side locks, skin tone, markings, head accessories with their body side, asymmetries.\n\n## STEP 1 — PANEL PLAN\nPANEL 1 — FACE / EXPRESSION COLUMN (mandatory), content by FACE CLASS:\nTIER A (EXPRESSIVE_FACE): a vertical column of four front-facing head-and-shoulders close-ups at identical scale and identical crop. Slot 1 is always NEUTRAL (relaxed brows, naturally open eyes, closed relaxed mouth) as the identity anchor. Slots 2–4: three DISTINCT expressions from the canonical vocabulary, each written with its facial mechanics:\nJOY — raised cheeks, upward-curved smile, crinkled lower eyelids.\nLAUGH — open-mouth grin, curved closed happy eyes.\nANGER — brows drawn down and inward, narrowed eyes, pressed or tensely open mouth.\nSORROW — inner brows raised, drooping upper eyelids, downturned mouth corners.\nSURPRISE — raised brows, wide open eyes, dropped-jaw open mouth.\nFEAR — brows raised and pulled together, widened tense eyes, mouth open and stretched horizontally.\nDISGUST — wrinkled nose, raised upper lip, lowered brows.\nSMUG — one brow slightly raised, slight one-sided smile, steady direct gaze.\nSHY — downward averted gaze, faint cheek blush, small closed smile.\nDETERMINED — level firm brows, focused direct gaze, firmly closed mouth.\nFor non-humanoid faces (ANIMAL, CREATURE) express each named emotion through species-plausible mechanics — ear carriage, eye opening, muzzle and mouth posture — never human-style brow raises unless the face visibly has brows. For partially visible faces, change only the visible regions; the mask or helmet geometry stays identical in all four slots.\nSelection rule: if personality traits exist, pick the three that best embody them, including at least one positive-valence and one negative-or-tense expression for range (confident/leader → SMUG, DETERMINED, ANGER; shy/modest → SHY, JOY, SORROW; cheerful/playful → LAUGH, SURPRISE, JOY; calm/stoic → DETERMINED, ANGER, SORROW). If no personality text: default JOY, ANGER, SORROW. Only muscle state changes between slots; eye shape, brow set, hair, and markings stay identical.\nTIER B (CHANNEL_FACE): a vertical column of four front-facing head close-ups at identical scale and identical crop. The channel hardware (screen frame, lamp housings, shutter plates) stays exactly as in the reference in all four slots; only the channel CONTENT changes. Slot 1 is always IDLE: channel exactly as shown in the reference. Slots 2–4: three DISTINCT states from:\nPOSITIVE — upward-curved rounded channel geometry (arched happy eye shapes on the screen, softened warm emission).\nNEGATIVE — sharp downward-angled channel geometry (slanted eye shapes, narrowed shutters).\nALERT — widened enlarged channel geometry with brighter emission.\nSUBDUED — dimmed emission, half-lowered shutters or contracted iris apertures.\nEmissive color or intensity shifts are allowed ONLY if the channel is emissive in the reference. Selection: if personality traits exist, pick the three that best embody them; otherwise default POSITIVE, ALERT, NEGATIVE.\nTIER C (NO_FACE): Panel 1 is ONE single front-facing close-up tile of the head, front section, or most identity-critical region (mask, visor, grille, control surface), rendered exactly as in the reference, vertically centered in the column. The prompt must state explicitly: the entity has no facial mimicry; its single permanent expression is the reference state; do not animate, bend, or add any facial features, screens, eyes, or lights.\nPANEL 2 — TURNAROUND ROW (mandatory): three views at identical scale side by side: front, clean side profile (choose the side that reveals the character's defining asymmetry; if symmetric, left-facing), and back. Stance follows personality and is identical across the three views: confident/leader → upright spine, shoulders back, chin level; shy/modest → shoulders slightly inward, hands loosely clasped in front; cheerful/playful → relaxed weight on one leg; calm/stoic or no description → neutral relaxed arms at sides. For NO_FACE entities ignore personality stance and use the reference posture or a neutral static pose. Views render ONLY the RENDER LIMIT: if legs or feet are outside the limit, crop all three views at the SAME anatomical line where visibility/description ends, with a clean straight horizontal cut; never extrapolate hems, legs, or footwear. Soft oval ground contact shadows are allowed.\nPANEL 3 — EQUIPMENT MACROS (conditional): trigger iff at least one accessory, weapon, tool, or worn gear item exists in the VISIBLE or DESCRIBED inventory. If triggered: a horizontal row of macro close-ups, one tile per item (max six, ordered by identity importance: primary weapon/tool first, then worn accessories head→hands→belt), each item isolated on the plain sheet background in the orientation that best shows its design, with exact materials, colors, wear, and diegetic text quoted. If not triggered: the panel is absent and its space returns to Panel 2.\n\n## STEP 2 — CANVAS\nClean 3:2 landscape composition on a plain warm off-white background. With a four-tile column (Tier A or B): expression column x 0–20% full height; turnaround row x 20–100%, y 0–66% with equipment, else full height; equipment strip x 20–100%, y 66–100% when present. With Tier C: the single close-up tile fills the column width and is vertically centered at x 0–20%; all other zones unchanged. Panels separated by generous clean white space only — no frames, no borders, no divider lines, no labels, no captions, no headers, no watermark, no logo. Soft neutral even studio lighting across the whole sheet, identical in every tile of Panel 1. Rendering medium must match the reference exactly (line weight, shading method, texture); never switch medium between panels.\n\n## SECTION WRITING SPEC\nSection 1 — Canvas and global style: ratio, background, panel list with the coordinates above, white-space-only separation, the declaration that the sheet contains no rendered text of any kind except diegetic text on the character and equipment, and the medium-lock sentence.\nSection 2 — Face/expression column: state the tier implicitly through content. Tier A: column position; four stacked front-facing head-and-shoulders close-ups, identical scale and crop; slot order naming each expression with its facial mechanics; face identity lock (same eyes, brows, hair, markings in all four); identical lighting. Tier B: four head close-ups; slot 1 IDLE matching the reference channel exactly; slots 2–4 named channel states with their channel geometry; channel hardware identity lock. Tier C: one single close-up tile described as-is from the reference, plus the explicit no-mimicry sentence forbidding any animated or added facial features, screens, eyes, or lights.\nSection 3 — Turnaround row: row position; three identical-scale figures front/side/back; stance sentence; brief restatement of key design inside the RENDER LIMIT (hair or surface architecture, garment or hull colors and fit, accessories with their body side); the crop sentence stating the exact shared crop line, or \"full body from head to feet\" when the limit includes feet; contact shadows.\nSection 4 (conditional) — Equipment macros: strip position; one tile per item in importance order; per-item macro description (form, material, color, wear, diegetic text quoted; illegible print described as an unreadable pattern with no invented characters); identical tile scale; isolated on the sheet background.\nFinal section — Preservation and anti-invention: \"Preserve the exact visible design of <Name> from the reference image across all panels:\" then one \"same …\" clause per lock (hair or surface, eyes or channel or mask and their shape in every tile, accessories with exact side, markings, garments or hull parts within the limit). Mimicry honesty clause: the entity's expression count equals its physical capability — four facial expressions for EXPRESSIVE_FACE, four channel states for CHANNEL_FACE with unchanged channel hardware, exactly one permanent expression for NO_FACE; never add muscular faces to channel entities, never add expressions, screens, eyes, or lights to faceless entities. Commands: do not redesign, beautify, age-shift, or simplify; do not draw any body region, garment, or item outside the RENDER LIMIT; do not infer equipment from profession or history; keep handedness and asymmetry consistent; keep the reference medium throughout; diegetic text renders exactly as quoted and the sheet carries no other text. Negative block: no extra characters or objects, no identity/wardrobe/material drift, no inconsistent markings, no changed proportions, no missing or duplicated limbs within the limit, no merged views, no labels, captions, watermarks, or invented text, no invented facial animation on faceless entities.\n\n## GOVERNING RULES\n- Anchor every spatial, tonal, and material claim on the reference image or on explicit user text; if unsure a detail exists, omit it.\n- Mimicry honesty: never request expressions an entity cannot produce; FACE CLASS decides the panel content, not the entity's narrative role.\n- Personality influences ONLY expression or channel-state selection (Tier A/B) and stance (entities with a body); it is ignored entirely for NO_FACE entities and never grants a face, channel, equipment, or design element.\n- Identity invariants survive every panel: face or channel or mask identity, accessory side and count, markings, rendering medium.\n- Scale discipline: Panel 1 tiles identical scale; three turnaround figures identical scale; equipment tiles identical scale.\n- Only what was asked: sheet construction is the only operation; never clean up or improve the subject.\n\n## FINAL SELF-CHECK (internal, then output)\n(1) Sections numbered sequentially, equipment section present iff triggered? (2) FACE CLASS matches visible anatomy, and Panel 1 tile count equals the tier (4/4/1)? (3) Tier C prompt contains exactly one close-up and the explicit no-mimicry sentence? (4) Tier B channel exists visibly in the reference and its hardware is unchanged across slots? (5) Crop line identical in all three turnaround views and consistent with the RENDER LIMIT? (6) Every quoted string diegetic and exact; no other quotes? (7) No sheet labels, captions, or headers anywhere in the prompt? (8) Nothing inferred from profession or history? (9) Medium locked? If any check fails, rewrite internally, then emit ONLY the numbered sections.\n\n# USER\n"
+            }
+          },
+          {
+            "id": 574,
+            "type": "StringConcatenate",
+            "pos": [
+              509.7077358511071,
+              5009.614717035021
+            ],
+            "size": [
+              400,
+              200
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "string_a",
+                "name": "string_a",
+                "type": "STRING",
+                "widget": {
+                  "name": "string_a"
+                },
+                "link": 998
+              },
+              {
+                "localized_name": "string_b",
+                "name": "string_b",
+                "type": "STRING",
+                "widget": {
+                  "name": "string_b"
+                },
+                "link": 999
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  1023
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.37.0",
+              "Node name for S&R": "StringConcatenate"
+            },
+            "widgets_values": [
+              "",
+              "",
+              ""
+            ],
+            "widgets_values_named": {
+              "string_a": "",
+              "string_b": "",
+              "delimiter": ""
+            }
+          },
+          {
+            "id": 595,
+            "type": "TextGenerate",
+            "pos": [
+              1043.8928242641946,
+              4173.348166964275
+            ],
+            "size": [
+              400,
+              456
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "showAdvanced": true,
+            "inputs": [
+              {
+                "localized_name": "clip",
+                "name": "clip",
+                "type": "CLIP",
+                "link": 1022
+              },
+              {
+                "localized_name": "image",
+                "name": "image",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 1021
+              },
+              {
+                "localized_name": "video",
+                "name": "video",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "audio",
+                "name": "audio",
+                "shape": 7,
+                "type": "AUDIO",
+                "link": null
+              },
+              {
+                "localized_name": "system_prompt",
+                "name": "system_prompt",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              },
+              {
+                "localized_name": "prompt",
+                "name": "prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "prompt"
+                },
+                "link": 1023
+              },
+              {
+                "localized_name": "max_length",
+                "name": "max_length",
+                "type": "INT",
+                "widget": {
+                  "name": "max_length"
+                },
+                "link": 1029
+              },
+              {
+                "localized_name": "temperature",
+                "name": "sampling_mode.temperature",
+                "type": "FLOAT",
+                "widget": {
+                  "name": "sampling_mode.temperature"
+                },
+                "link": 1030
+              },
+              {
+                "localized_name": "seed",
+                "name": "sampling_mode.seed",
+                "type": "INT",
+                "widget": {
+                  "name": "sampling_mode.seed"
+                },
+                "link": 1031
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "generated_text",
+                "name": "generated_text",
+                "type": "STRING",
+                "links": [
+                  1027
+                ]
+              },
+              {
+                "localized_name": "thinking",
+                "name": "thinking",
+                "type": "STRING",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.37.0",
+              "Node name for S&R": "TextGenerate"
+            },
+            "widgets_values": [
+              "",
+              32768,
+              "on",
+              0.8,
+              20,
+              0.95,
+              0,
+              1,
+              0,
+              0,
+              true,
+              true,
+              "auto"
+            ],
+            "widgets_values_named": {
+              "prompt": "",
+              "max_length": 32768,
+              "sampling_mode": "on",
+              "sampling_mode.temperature": 0.8,
+              "sampling_mode.top_k": 20,
+              "sampling_mode.top_p": 0.95,
+              "sampling_mode.min_p": 0,
+              "sampling_mode.repetition_penalty": 1,
+              "sampling_mode.seed": 0,
+              "sampling_mode.presence_penalty": 0,
+              "thinking": true,
+              "use_default_template": true,
+              "mtp": "auto"
+            }
+          },
+          {
+            "id": 596,
+            "type": "CLIPLoader",
+            "pos": [
+              300.5464360493654,
+              3895.6445470197336
+            ],
+            "size": [
+              606.5618287407023,
+              113.99555079081873
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "clip_name",
+                "name": "clip_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "clip_name"
+                },
+                "link": 1028
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "CLIP",
+                "name": "CLIP",
+                "type": "CLIP",
+                "links": [
+                  1022
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.37.0",
+              "Node name for S&R": "CLIPLoader"
+            },
+            "widgets_values": [
+              "ltx/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+              "stable_diffusion",
+              "default"
+            ],
+            "widgets_values_named": {
+              "clip_name": "ltx/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+              "type": "stable_diffusion",
+              "device": "default"
+            }
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 998,
+            "origin_id": 478,
+            "origin_slot": 0,
+            "target_id": 574,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 999,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 574,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 1027,
+            "origin_id": 595,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 1028,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 596,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 1022,
+            "origin_id": 596,
+            "origin_slot": 0,
+            "target_id": 595,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 1021,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 595,
+            "target_slot": 1,
+            "type": "IMAGE"
+          },
+          {
+            "id": 1023,
+            "origin_id": 574,
+            "origin_slot": 0,
+            "target_id": 595,
+            "target_slot": 5,
+            "type": "STRING"
+          },
+          {
+            "id": 1029,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 595,
+            "target_slot": 6,
+            "type": "INT"
+          },
+          {
+            "id": 1030,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 595,
+            "target_slot": 7,
+            "type": "FLOAT"
+          },
+          {
+            "id": 1031,
+            "origin_id": -10,
+            "origin_slot": 5,
+            "target_id": 595,
+            "target_slot": 8,
+            "type": "INT"
+          }
+        ],
+        "extra": {}
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "linearData": {
+      "inputs": [
+        [
+          "f754dab1-c888-4b6a-86c8-ae2c7177d3b9:580:image",
+          "image"
+        ],
+        [
+          "f754dab1-c888-4b6a-86c8-ae2c7177d3b9:589:value",
+          "value"
+        ],
+        [
+          "f754dab1-c888-4b6a-86c8-ae2c7177d3b9:577:megapixels",
+          "megapixels"
+        ],
+        [
+          "f754dab1-c888-4b6a-86c8-ae2c7177d3b9:578:seed",
+          "seed"
+        ]
+      ],
+      "outputs": [
+        "579",
+        "588"
+      ]
+    },
+    "linearMode": true,
+    "ds": {
+      "scale": 0.8264462809917354,
+      "offset": [
+        823.6155488576602,
+        -1907.4425389891962
+      ]
+    },
+    "frontendVersion": "1.53.6",
+    "VHS_latentpreview": true,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4,
+  "seed_widgets": {
+    "578": 7
+  }
+}

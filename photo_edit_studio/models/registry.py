@@ -28,6 +28,35 @@ class ModelSpec:
 
 
 MODEL_SPECS: dict[str, ModelSpec] = {
+    "qwen-2.1-turbo-official": ModelSpec(
+        key="qwen-2.1-turbo-official",
+        label="Qwen Image 2.1 Turbo Official (BF16 · 12 GB offload unverified)",
+        repo_id="Qwen/Qwen-Image-2.1-Turbo",
+        loader="qwen21_official",
+        family="qwen21-official",
+        default_steps=8,
+        default_guidance=1.0,
+        default_true_cfg=1.0,
+        max_images=3,
+        minimum_vram_gb=12,
+        recommended=False,
+        license_note="Qwen Research License: non-commercial; full BF16 CPU offload, 12 GB fit unverified",
+    ),
+    "qwen-2.1-sheet": ModelSpec(
+        key="qwen-2.1-sheet",
+        label="Qwen Image 2.1 Character Sheet (full BF16 · experimental)",
+        repo_id="Qwen/Qwen-Image-2.1",
+        loader="qwen21_sheet_comfy",
+        family="qwen21-sheet",
+        default_steps=25,
+        default_guidance=1.0,
+        default_true_cfg=1.0,
+        max_images=1,
+        minimum_vram_gb=12,
+        recommended=False,
+        license_note="Qwen Research License: non-commercial; full BF16 with CPU offload; high RAM/VRAM demand",
+        task="character-sheet",
+    ),
     "krea-2-turbo": ModelSpec(
         key="krea-2-turbo",
         label="Krea 2 Turbo (text-to-image · 12 GB offload)",
@@ -127,6 +156,20 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         recommended=True,
         license_note="Apache-2.0",
     ),
+    "qwen-2.1-turbo-official-extract": ModelSpec(
+        key="qwen-2.1-turbo-official-extract",
+        label="Qwen Image 2.1 Turbo Official + extracted LoRA (BF16 · experimental stack)",
+        repo_id="Qwen/Qwen-Image-2.1-Turbo",
+        loader="qwen21_official_extract",
+        family="qwen21-official",
+        default_steps=8,
+        default_guidance=1.0,
+        default_true_cfg=1.0,
+        max_images=3,
+        minimum_vram_gb=12,
+        recommended=False,
+        license_note="Qwen Research License: non-commercial; experimental official Turbo checkpoint + extracted LoRA at weight 1; not original base; 12 GB fit unverified",
+    ),
 }
 
-TEXT_TO_IMAGE_KEYS = ("krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo", "qwen-2.1-turbo-r128")
+TEXT_TO_IMAGE_KEYS = ("krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo", "qwen-2.1-turbo-r128", "qwen-2.1-turbo-official", "qwen-2.1-turbo-official-extract")

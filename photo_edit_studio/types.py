@@ -48,6 +48,11 @@ class GenerationRequest:
     swap_kind: str | None = None
     krea_first_lora_weight: float = 1.0
     dlss: dict[str, Any] | None = None
+    sheet_layout: str = "Simple"
+    sheet_prompt_mode: str = "Static"
+    sheet_entity_name: str = ""
+    sheet_character_description: str = ""
+    sheet_megapixels: float = 3.4
 
 
 @dataclass(slots=True)

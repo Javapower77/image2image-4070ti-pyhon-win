@@ -70,7 +70,38 @@ The bundled graph connects both `Krea2EditGroundedEncode` nodes and the `Krea2Ed
 
 ## BFS LoRA missing / swap model mismatch
 
-For Qwen 2511, FLUX.2 Klein 4B, and Krea 2, run `python scripts/download_models.py --bfs-swap`. Qwen Image 2.1 Head/Body LoRAs are not in that download: copy `Qwen21-BFS_Head_v1.1.safetensors` and `Qwen21-BFS_Body_v1.1.safetensors` into `models/loras/qwen21/`. Other models are intentionally excluded; cross-family LoRAs cannot be loaded safely.
+Run `python scripts/download_models.py --bfs-swap` for the existing four
+Qwen 2511/FLUX/Krea files **plus** the two pinned Qwen 2.1 files. For Qwen 2.1
+only, use `.\scripts\download-models.ps1 -Preset qwen-2.1-bfs` or
+`.\.venv\Scripts\python.exe scripts\download_models.py --qwen21-bfs`.
+Expected canonical files in `models/loras/qwen21/` are
+`bfs_head_v1.1_qwen_2.1.safetensors` (260096144 bytes) and
+`bfs_body_swap_v1.0_qwen_2.1.safetensors` (209753576 bytes).
+See [exact SHA256/Civitai pins](SWAP.md#canonical-qwen-21-bfs-assets-and-migration).
+Verified legacy aliases are copied to canonical names with originals kept;
+these are the same bytes, not new weights. Body is published **v1.0**, despite
+the legacy `Qwen21-BFS_Body_v1.1.safetensors` alias. Invalid legacy files are kept
+and a pinned download is attempted; invalid canonical files fail closed without
+overwrite. Move/remove an invalid canonical file deliberately before retrying.
+Other models remain intentionally excluded; cross-family LoRAs are unsafe.
+
+### Official BF16 BFS request or shape failure
+
+Use `qwen-2.1-turbo-official`, not the swap-ineligible `official-extract` profile.
+Supply exactly two images (body/source then replacement reference), Head/Body,
+eight steps, CFG/True CFG 1, empty negative prompt and sole matching canonical
+`bfs_swap` adapter at finite weight **0.1–1.5**. Omit optional LoRAs and set
+`dlss=None`; a disabled DLSS dictionary is still rejected. The full official
+snapshot/dependencies are required, but ComfyUI/Viggle/r128 are not used here.
+
+Size/hash failures are checked before a cold checkpoint allocation. **Actual
+target shapes are checked after the full BF16 checkpoint is allocated**, before
+installation/offload, so a shape failure can still consume substantial RAM.
+Do not bypass pins or discard incompatible keys: CPU A/B normalization splits
+gate-first into `gate_layer`/`proj`, with intrinsic scale 1 and request weight
+separate. Reload after an installation/change failure rather than assuming
+rollback. Compatibility, live inference, visual quality and VRAM fit remain
+unconfirmed; this is not a validated 12 GB inference recipe.
 
 ## Krea swap workflow missing or ComfyUI rejects the prompt
 
@@ -111,6 +142,27 @@ Sequential CPU offload continuously transfers layers over PCIe. This is expected
 ## LoRA failed to load
 
 Confirm that the file is an adapter for the selected architecture, not a complete checkpoint. Start with one LoRA, unload the model after a failed attempt, and keep its weight near 1.0.
+
+## Qwen 2511 BFS: missing alpha or silently missing bias updates
+
+An older legacy-converter failure such as `KeyError: 'img_in.alpha'` does not
+mean this BFS file is corrupt. The measured Qwen 2511 Head file has **846 LoRA
+matrix pairs, 846 `.diff_b` bias deltas and 241 `.diff` direct weight deltas**,
+and **no alpha tensors**. See [pinned measured header/cache provenance](MODELS.md#qwen-image-edit-2511-mixed-format-loras)
+for revision, LFS ETag, size and verification limits. Qwen 2511 is **Head only,
+not Body**; do not substitute Qwen 2.1 adapters.
+
+The Qwen-specific loader uses omitted alpha = actual rank (intrinsic scale 1),
+preserves explicit alpha/rank and applies signed strength separately, once.
+Direct biases/weights are additive at request strength, not alpha-scaled or
+discarded. Unknown keys/targets, orphan pairs/alpha and incompatible shapes
+fail before updates; **no silent drop or architecture fallback** is supported.
+After an installation/offload failure the pipeline is discarded: reload it,
+rather than assuming rollback. Weight changes and deselection normally restore
+pristine originals; unchanged signatures do not accumulate direct deltas.
+Hook detachment must precede validation/restoration, with memory configuration
+after installation. CPU regression tests cover synthetic modules and real
+Accelerate hooks when installed, not full weights or inference.
 
 ## Identity changes
 

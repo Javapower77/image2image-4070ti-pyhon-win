@@ -29,10 +29,13 @@ from photo_edit_studio.ui import (
 
 def test_registry_has_requested_models() -> None:
     assert set(MODEL_SPECS) == {
+        "qwen-2.1-turbo-official",
+        "qwen-2.1-turbo-official-extract",
         "qwen-2511",
         "qwen-2511-aio",
         "qwen-2.1-turbo",
         "qwen-2.1-turbo-r128",
+        "qwen-2.1-sheet",
         "firered-1.1",
         "flux-klein-4b",
         "krea-2-turbo",
@@ -237,7 +240,7 @@ def test_text_canvas_preview_uses_selected_resolution_and_aspect() -> None:
 
 def test_text_mode_limits_model_dropdown_and_keeps_flux_selected() -> None:
     choices = _model_choices_for_mode(TEXT_MODE, "flux-klein-4b")
-    assert [key for _, key in choices["choices"]] == ["krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo", "qwen-2.1-turbo-r128"]
+    assert [key for _, key in choices["choices"]] == ["krea-2-turbo", "flux-klein-4b", "qwen-2.1-turbo", "qwen-2.1-turbo-r128", "qwen-2.1-turbo-official", "qwen-2.1-turbo-official-extract"]
     assert choices["value"] == "flux-klein-4b"
     assert _model_choices_for_mode(TEXT_MODE, "qwen-2511")["value"] == "krea-2-turbo"
     assert _standard_model_changed("flux-klein-4b", TEXT_MODE)[5]["value"] == TEXT_MODE
@@ -247,7 +250,7 @@ def test_text_mode_limits_model_dropdown_and_keeps_flux_selected() -> None:
 def test_image_edit_modes_exclude_text_only_krea(mode: str) -> None:
     choices = _model_choices_for_mode(mode, "krea-2-turbo")
     keys = [key for _, key in choices["choices"]]
-    assert keys == ["qwen-2511", "qwen-2511-aio", "qwen-2.1-turbo", "qwen-2.1-turbo-r128", "firered-1.1", "flux-klein-4b"]
+    assert keys == ["qwen-2511", "qwen-2511-aio", "qwen-2.1-turbo", "qwen-2.1-turbo-r128", "firered-1.1", "flux-klein-4b", "qwen-2.1-turbo-official", "qwen-2.1-turbo-official-extract"]
     assert choices["value"] == "qwen-2511"
     assert _model_choices_for_mode(mode, "firered-1.1")["value"] == "firered-1.1"
 

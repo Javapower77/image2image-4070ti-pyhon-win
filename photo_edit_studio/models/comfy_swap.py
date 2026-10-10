@@ -41,6 +41,14 @@ from photo_edit_studio.krea_all2real import (
     missing_krea_all2real_assets,
     validate_krea_all2real_request,
 )
+from photo_edit_studio.krea_character_sheet import (
+    KREA_CHARACTER_SHEET_ASSET_HINT,
+    KREA_CHARACTER_SHEET_PROFILES,
+    configure_krea_character_sheet_graph,
+    krea_character_sheet_template,
+    missing_krea_character_sheet_assets,
+    validate_krea_character_sheet_request,
+)
 from photo_edit_studio.models.base import ModelAdapter
 from photo_edit_studio.models.diffusers_adapters import FRAMING_SUFFIX
 from photo_edit_studio.models.memory import cuda_available, cuda_vram_gb
@@ -227,6 +235,12 @@ def preflight_krea_remix_graph(
     required = {node["class_type"] for node in graph.values()}
     missing = required - set(registered)
     if missing:
+        if label in KREA_CHARACTER_SHEET_PROFILES:
+            raise RuntimeError(
+                f"{label} is missing ComfyUI nodes: {', '.join(sorted(missing))}. "
+                "Update core ComfyUI and comfyui-krea2edit and restart; character sheets "
+                "require Krea2EditModelPatch/Krea2EditGroundedEncode, not Ostris replacements."
+            )
         raise RuntimeError(
                 f"{label} is missing ComfyUI nodes: {', '.join(sorted(missing))}. "
             "Run scripts/setup-comfy.ps1 to install https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit "
@@ -241,6 +255,19 @@ def preflight_krea_remix_graph(
             if field not in inputs:
                 raise RuntimeError(f"{label} node {node['class_type']} lacks input {field}; update nodes and restart ComfyUI.")
             choices = inputs[field][0]
+            if choices == "COMFY_DYNAMICCOMBO_V3":
+                # Core V3 expands scalar "off" into the execution dictionary.
+                # Only accept a declared empty branch here; supporting expanded
+                # sampled inputs needs separate schema-aware validation.
+                options = inputs[field][1].get("options", []) if len(inputs[field]) > 1 else []
+                branch = next((option for option in options if option.get("key") == value), None)
+                if branch is None or any(branch.get("inputs", {}).get(kind, {})
+                                         for kind in ("required", "optional")):
+                    raise RuntimeError(
+                        f"{label} {node['class_type']} requires a registered empty dynamic-combo "
+                        f"branch for {field}={value}; update ComfyUI and restart."
+                    )
+                continue
             if choices == "COMBO" and len(inputs[field]) > 1:
                 choices = inputs[field][1].get("options", [])
             if node["class_type"] == "LoadImage" and field == "image":
@@ -788,7 +815,20 @@ class ComfyKreaSwapAdapter(ModelAdapter):
         self, request: GenerationRequest, progress: GenerationProgress | None = None
     ) -> list[Image.Image]:
         validate_dlss_request(request)
-        if request.workflow == "krea-all2real":
+        sheet = request.workflow in KREA_CHARACTER_SHEET_PROFILES
+        if sheet:
+            validate_krea_character_sheet_request(request)
+            missing = missing_krea_character_sheet_assets(settings.comfy_dir, request.workflow)
+            if missing:
+                raise FileNotFoundError(
+                    "Krea character-sheet assets missing: " + ", ".join(missing) +
+                    ". " + KREA_CHARACTER_SHEET_ASSET_HINT
+                )
+            graph = configure_krea_character_sheet_graph(
+                krea_character_sheet_template(request.workflow), request, ("source.png",),
+            )
+            workflow_path = None
+        elif request.workflow == "krea-all2real":
             validate_krea_all2real_request(request)
             missing = missing_krea_all2real_assets(settings.comfy_dir)
             if missing:
@@ -838,7 +878,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
             graph = krea_reference_template()
         graph = deepcopy(graph)
         url = _local_comfy_url(settings.comfy_url)
-        if request.workflow in {"krea-remix", "krea-all2real"}:
+        if sheet or request.workflow in {"krea-remix", "krea-all2real"}:
             ensure_backend(workflow=request.workflow)
         else:
             ensure_backend()
@@ -852,17 +892,19 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                     "docs/KREA_REFERENCES.md before using Krea reference editing."
                 ) from exc
             preflight_dlss(client, request)
-            if request.workflow in {"krea-remix", "krea-all2real"}:
-                label = "All2Real" if request.workflow == "krea-all2real" else "Krea remix"
+            if sheet or request.workflow in {"krea-remix", "krea-all2real"}:
+                label = request.workflow if sheet else "All2Real" if request.workflow == "krea-all2real" else "Krea remix"
                 try:
                     response = client.get("/object_info")
                     response.raise_for_status()
                     registered = response.json()
                     if not isinstance(registered, dict):
-                        raise ValueError("Expected a node registry dictionary.")
+                        raise ValueError("Expected a node registry dictionary.")  # noqa: TRY004 -- invalid API payload
                 except (httpx.HTTPError, ValueError) as exc:
-                    raise RuntimeError(f"Cannot verify {label} Ostris nodes and registered assets.") from exc
-                if request.workflow == "krea-all2real":
+                    raise RuntimeError(f"Cannot verify {label} nodes and registered assets.") from exc
+                if sheet:
+                    preflight_krea_remix_graph(graph, registered, label=label)
+                elif request.workflow == "krea-all2real":
                     preflight_krea_remix_graph(graph, registered, label="All2Real")
                 else:
                     preflight_krea_remix_graph(graph, registered)
@@ -881,7 +923,7 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                 )
                 response.raise_for_status()
                 names.append(response.json()["name"])
-            if request.workflow in {"krea-remix", "krea-all2real"}:
+            if sheet or request.workflow in {"krea-remix", "krea-all2real"}:
                 # Already configured and preflighted; change only the uploaded source.
                 graph["72"]["inputs"]["image"] = names[0]
                 payload = graph
@@ -894,6 +936,8 @@ class ComfyKreaSwapAdapter(ModelAdapter):
             add_dlss_nodes(payload, request)
             queued = client.post("/prompt", json={"prompt": payload})
             if queued.status_code >= 400:
+                if sheet:
+                    raise RuntimeError(f"ComfyUI rejected {request.workflow} graph: {queued.text[:500]}")
                 if request.workflow == "krea-all2real":
                     raise RuntimeError(f"ComfyUI rejected the All2Real graph: {queued.text[:500]}")
                 if request.workflow == "krea-remix":
@@ -913,6 +957,8 @@ class ComfyKreaSwapAdapter(ModelAdapter):
                     if job.get("status", {}).get("status_str") == "error":
                         raise RuntimeError("ComfyUI reported an error; inspect its local console for details.")
                     outputs = job.get("outputs", {}).get("29", {}).get("images", [])
+                    if sheet and len(outputs) != 1:
+                        raise RuntimeError("Krea character-sheet SaveImage 29 must return exactly one generated output.")
                     if request.workflow == "krea-all2real" and len(outputs) != 1:
                         raise RuntimeError("All2Real SaveImage 29 must return exactly one generated output.")
                     if outputs:

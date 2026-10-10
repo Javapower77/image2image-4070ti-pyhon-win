@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "accelerate>=1.12,<2",
+  # Keep upstream HEAD for existing pipelines; official Qwen runtime checks PR #14950 APIs.
   "diffusers @ git+https://github.com/huggingface/diffusers.git",
   "gradio>=6.0,<7",
   "gguf>=0.17,<1",
@@ -22,7 +23,7 @@ dependencies = [
   "pydantic-settings>=2.7,<3",
   "safetensors>=0.5,<1",
   "sentencepiece>=0.2,<1",
-  "transformers>=4.57,<6",
+  "transformers>=5.17,<6",
 ]
 
 [project.optional-dependencies]

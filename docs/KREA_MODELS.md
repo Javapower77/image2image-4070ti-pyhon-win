@@ -7,7 +7,8 @@ GiB, not measured peak RAM/VRAM or model quality scores.
 
 ## Shared files used by standard Krea workflows
 
-Text, Reference edit, Composition remix and head/body swaps use the set below.
+Text, Reference edit, Composition remix, QuadView/Dynamic character sheets and
+head/body swaps use the set below.
 **All2Real is an exception:** it shares the encoder and mandatory first adapter,
 but requires the approved INT8 transformer alias, Wan upscale VAE and skin-detail model
 instead of the standard transformer/VAE. Its assets are not covered by the
@@ -157,6 +158,34 @@ Four-tile skin detail follows final RGB decode.
 The project's NO8D/WAS replacements and core decode are **not verified exact
 upstream/VAEUtils parity**, and no 12 GB memory or visual-quality claim is made.
 See [All2Real prerequisites and limits](KREA_ALL2REAL.md).
+
+## Image-to-image: QuadView — Krea 2 and DynamicCharacterSheet
+
+UI: **Krea reference edit → QuadView — Krea 2** or
+**DynamicCharacterSheet (experimental)**. Workflows: `krea-quadview` and
+`krea-dynamic-sheet`. Both use the shared FP8 transformer/encoder/Qwen VAE above,
+not the All2Real original asset set.
+
+The explicit PowerShell `krea-character-sheets` preset / Python
+`--comfy-krea-character-sheets` flag supplies shared assets and mandatory first,
+plus two ~0.85 GiB Krea adapters and two upstream workflow JSONs from
+`Alissonerdx/CharacterSheet`, pinned at
+`3dc4295163dacc924d213168d67bf16850fd954f`. These are download sizes, not newly
+verified installed sizes. No identity-edit or MoreReal adapter is requested.
+
+Chain: **FP8 → mandatory first → selected sheet → optional adapters → Krea2Edit
+model patch → sampler**. One aspect-preserved source at most 1024 on its longest
+side; no square crop. Fixed **1536×1024** sheet canvas bypasses the ordinary 1MP
+edit clamp, with grounding 0 and reference boost 1. Defaults: **10 steps / CFG 1**,
+QuadView **Euler/simple**, Dynamic **LCM/simple**. Higher-than-1MP memory needs
+remain unbenchmarked. No identity/Remix/MoreReal stack.
+
+QuadView retains its trigger and appends customization. Dynamic blank prompts
+use the full pinned caption template at node 184 through greedy/off TextGenerate;
+publisher sampled/on behavior is intentionally adapted. Manual structured-header
+captions bypass VLM generation, but validation does not guarantee complete format
+or accurate on-sheet text. No inference was performed for this addition.
+See [character-sheet installation, prompt policies and limits](KREA_CHARACTER_SHEETS.md).
 
 ## Image-to-image: head/body swaps
 

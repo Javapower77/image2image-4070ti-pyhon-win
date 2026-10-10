@@ -18,6 +18,14 @@ from photo_edit_studio.image_utils import (
     normalize_image,
     scaled_output_size,
 )
+from photo_edit_studio.krea_character_sheet import (
+    KREA_CHARACTER_SHEET_PROFILES,
+    KREA_CHARACTER_SHEET_REVISION,
+    KREA_CHARACTER_SHEET_SIZE,
+    KREA_CHARACTER_SHEET_SOURCE,
+    KREA_DYNAMIC_TEMPLATE_SHA256,
+    validate_krea_character_sheet_request,
+)
 from photo_edit_studio.models import MODEL_SPECS, model_manager
 from photo_edit_studio.models.memory import release_cuda
 from photo_edit_studio.models.registry import TEXT_TO_IMAGE_KEYS
@@ -32,10 +40,17 @@ def generate(
     restore_weight: float,
     progress: GenerationProgress | None = None,
 ) -> GenerationResult:
+    spec = MODEL_SPECS[request.model_key]
+    if spec.family == "qwen21-official":
+        from photo_edit_studio.models.diffusers_adapters import validate_qwen21_official_request
+
+        validate_qwen21_official_request(request)
     dlss = validate_dlss_request(request)
     if progress is not None:
         progress.update(0.01, "Preparing request and sizing images")
-    spec = MODEL_SPECS[request.model_key]
+    qwen_sheet = request.workflow == "qwen-character-sheet"
+    if request.model_key == "qwen-2.1-sheet" and not qwen_sheet:
+        raise ValueError("qwen-2.1-sheet is only available for qwen-character-sheet.")
     if request.model_key == "krea-2-turbo" and request.workflow == "standard":
         request.workflow = "krea-text"
     if request.workflow in {"text", "krea-text"}:
@@ -45,7 +60,31 @@ def generate(
             raise ValueError("Choose a text-capable model for Create from text.")
         if request.images:
             raise ValueError("Create from text does not accept source images.")
-    if request.workflow == "krea-all2real":
+    sheet = request.workflow in KREA_CHARACTER_SHEET_PROFILES
+    if qwen_sheet:
+        from photo_edit_studio.qwen_character_sheet import (
+            qwen_character_sheet_size,
+            validate_qwen_character_sheet_request,
+        )
+
+        if type(request.seed) is int and request.seed < 0:
+            request.seed = secrets.randbelow(2**31 - 1)
+        validate_qwen_character_sheet_request(request)
+        if restoration != "Off":
+            raise ValueError("Qwen character sheets require face restoration Off.")
+        request.compose = False
+        request.width, request.height = qwen_character_sheet_size(request.sheet_megapixels)
+        input_max_side = 1536
+    elif sheet:
+        if type(request.seed) is int and request.seed < 0:
+            request.seed = secrets.randbelow(2**31 - 1)
+        validate_krea_character_sheet_request(request)
+        if restoration != "Off":
+            raise ValueError("Krea character sheets require face restoration Off.")
+        request.compose = False
+        request.width, request.height = KREA_CHARACTER_SHEET_SIZE
+        input_max_side = 1024
+    elif request.workflow == "krea-all2real":
         from photo_edit_studio.krea_all2real import validate_krea_all2real_request
         from photo_edit_studio.models.comfy_swap import krea_remix_size
 
@@ -113,19 +152,22 @@ def generate(
         input_max_side = max(request.width, request.height)
     requested_size = (request.width, request.height)
     canvas_workflow = request.compose
-    request.width, request.height = diffusion_output_size(
-        requested_size,
-        request.size_multiplier,
-        family=spec.family,
-        workflow=request.workflow,
-        canvas=canvas_workflow,
-        pre_sized=True,
-    )
+    # Sheet profiles own their explicit 1536x1024 budget, independent of the
+    # global 1024 edit cap. Never downsize their empty latent to the source AR.
+    if not (sheet or qwen_sheet):
+        request.width, request.height = diffusion_output_size(
+            requested_size,
+            request.size_multiplier,
+            family=spec.family,
+            workflow=request.workflow,
+            canvas=canvas_workflow,
+            pre_sized=True,
+        )
     if (request.width, request.height) != requested_size and request.workflow not in {"krea-remix", "krea-all2real"}:
         input_max_side = max(request.width, request.height)
     request.count = min(request.count, settings.max_batch_count)
     input_limit = (
-        1 if request.workflow in {"krea-remix", "krea-all2real"} else
+        1 if sheet or qwen_sheet or request.workflow in {"krea-remix", "krea-all2real"} else
         2 if request.workflow in {"swap", "krea-reference"} else spec.max_images
     )
     request.images = [
@@ -136,7 +178,12 @@ def generate(
         request.seed = secrets.randbelow(2**31 - 1)
 
     started = time.perf_counter()
-    if request.workflow in {"swap", "krea-reference", "krea-text", "krea-remix", "krea-all2real"} and request.model_key == "krea-2-turbo":
+    if qwen_sheet:
+        from photo_edit_studio.qwen_character_sheet import ComfyQwenCharacterSheetAdapter
+
+        model_manager.unload()
+        adapter = ComfyQwenCharacterSheetAdapter(spec)
+    elif (sheet or request.workflow in {"swap", "krea-reference", "krea-text", "krea-remix", "krea-all2real"}) and request.model_key == "krea-2-turbo":
         from photo_edit_studio.models.comfy_swap import ComfyKreaSwapAdapter
 
         model_manager.unload()
@@ -144,6 +191,16 @@ def generate(
     else:
         adapter = model_manager.get(request.model_key)
     images = adapter.generate(request, progress=progress)
+    if qwen_sheet:
+        if len(images) != 1:
+            raise RuntimeError("Qwen character sheets must return exactly one generated output.")
+        if dlss is None and images[0].size != requested_size:
+            raise RuntimeError("Qwen character-sheet native output differs from canvas; refusing silent resizing.")
+    if sheet:
+        if len(images) != 1:
+            raise RuntimeError("Krea character sheets must return exactly one generated output.")
+        if dlss is None and images[0].size != KREA_CHARACTER_SHEET_SIZE:
+            raise RuntimeError("Krea character-sheet native output must be 1536x1024; refusing silent resizing.")
     if request.workflow == "krea-all2real" and len(images) != 1:
         raise RuntimeError("All2Real must return exactly one generated output.")
     if request.workflow == "krea-remix" and len(images) != 1:
@@ -156,7 +213,33 @@ def generate(
             f"Low-VRAM limit reduced {requested_size[0]}×{requested_size[1]} to "
             f"{request.width}×{request.height}."
         )
-    if request.workflow == "krea-all2real":
+    if qwen_sheet:
+        notes.append(
+            f"Qwen {request.sheet_layout}/{request.sheet_prompt_mode} sheet: full BF16, "
+            f"25 steps CFG 1, res_multistep/beta; native {request.width}×{request.height}. "
+            "Optional ModelOnly LoRAs precede attention/cache; no mandatory Turbo adapter. "
+            "Aspect-preserved source <=1536 replaces KJ total_pixels resizing; both encoders "
+            "share that upload. Qwen conditioning resolution=1536 is an area target and may "
+            "internally exceed 1536 on the longest side. DeGrid auto runs before optional DLSS. "
+            "Auto uses thinking with greedy decoding (publisher sampling adaptation); "
+            "static replaces the example Ayaka name with the supplied name or a neutral reference. "
+            "Full BF16 at 3.4–6 MP may require substantial host RAM/VRAM; 12 GB is not a fit guarantee."
+        )
+    elif sheet:
+        policy = ("manual structured caption" if request.prompt.strip() else "publisher-template greedy VLM caption") if request.workflow == "krea-dynamic-sheet" else "fixed QuadView trigger plus optional customization"
+        notes.append(
+            f"{request.workflow}: native diffusion canvas 1536×1024; one aspect-preserved "
+            f"source <=1024 ({request.images[0].width}×{request.images[0].height}). "
+            "Shared FP8 Krea checkpoint; mandatory first adapter, selected sheet adapter, "
+            "then optional adapters. Grounding 0 on both conditioners; pixel-space fit to target latent."
+        )
+        notes.append(
+            f"Prompt policy: {policy}; CFG {request.guidance:g} "
+            "(negative conditioning ignored at CFG 1). No identity/Remix/MoreReal or restoration. "
+            "Dynamic sheet is experimental; text and view consistency are not guaranteed. "
+            "Source aspect preservation and greedy captioning are adaptations of the pinned publisher workflows."
+        )
+    elif request.workflow == "krea-all2real":
         notes.append(
             f"All2Real source budget capped at 1024: {request.width}×{request.height}; "
             f"actual uploaded source {request.images[0].width}×{request.images[0].height}. "
@@ -240,6 +323,34 @@ def generate(
         from photo_edit_studio.comfy_assets import FIRERED_LIGHTNING, FIRERED_TRANSFORMER
 
         notes.append(f"GGUF Q4_K_M: {FIRERED_TRANSFORMER}; automatic 8-step LoRA: {FIRERED_LIGHTNING}.")
+    elif spec.family == "qwen21-official":
+        notes.append(
+            "Official Qwen Image 2.1 Turbo: full BF16, publisher's saved eight-sigma schedule, "
+            "True CFG 1 and causal KV cache; no six-step or optional LoRAs. "
+            "CPU offload reused; 12 GB VRAM fit and live inference unverified."
+        )
+        if request.workflow == "swap":
+            from photo_edit_studio.swap import QWEN21_BFS_PINS, swap_profile
+
+            profile = swap_profile(request.model_key, request.swap_kind)
+            pin = QWEN21_BFS_PINS[request.swap_kind]
+            notes.append(
+                f"Two-image BFS {request.swap_kind} v{pin['version']}: "
+                f"{profile.filename}@{request.loras[0].weight:g}; "
+                "Source 1 = target body/scene, Source 2 = replacement reference. "
+                f"Training template: {profile.trigger}"
+            )
+        if spec.loader == "qwen21_official_extract":
+            from photo_edit_studio.models.qwen21_official_extract import (
+                QWEN21_OFFICIAL_EXTRACT_LORA,
+            )
+
+            pin = QWEN21_OFFICIAL_EXTRACT_LORA
+            notes.append(
+                f"Experimental stack (not original base): official Turbo checkpoint + mandatory "
+                f"{pin['filename']}@1; Civitai version {pin['version_id']}, file {pin['file_id']}, "
+                f"SHA256 {pin['sha256']}. Compatibility/live inference unverified."
+            )
     elif spec.family == "qwen21":
         from photo_edit_studio.comfy_assets import (
             QWEN21_R128_KEY,
@@ -252,10 +363,11 @@ def generate(
         else:
             notes.append(f"INT8 Qwen Image 2.1; unmerged Viggle r256 LoRA: {QWEN21_TURBO_LORA}; fixed six-step schedule.")
         if request.workflow == "swap":
+            from photo_edit_studio.swap import swap_profile
+
             notes.append(
-                "Two-image BFS Head swap with Qwen21-BFS_Head_v1.1.safetensors; results may vary."
-                if request.swap_kind == "Head" else
-                "Two-image BFS Body swap with Qwen21-BFS_Body_v1.1.safetensors; results may vary."
+                f"Two-image BFS {request.swap_kind} swap with "
+                f"{swap_profile(request.model_key, request.swap_kind).filename}; results may vary."
             )
 
     elapsed = time.perf_counter() - started
@@ -293,6 +405,101 @@ def _save(result: GenerationResult, request: GenerationRequest) -> list[Path]:
         "loras": [{"name": spec.name, "weight": spec.weight} for spec in request.loras],
         "prompt_stored": False,
     }
+    if MODEL_SPECS[request.model_key].family == "qwen21-official":
+        from photo_edit_studio.models.diffusers_adapters import QWEN21_OFFICIAL_SIGMAS
+
+        metadata.update(
+            sample_sigmas=list(QWEN21_OFFICIAL_SIGMAS),
+            actual_output_sizes=[list(image.size) for image in result.images],
+            use_kv_cache=True,
+            scheduler_source="checkpoint",
+        )
+        if request.workflow == "swap":
+            from photo_edit_studio.swap import QWEN21_BFS_PINS, swap_profile
+
+            profile = swap_profile(request.model_key, request.swap_kind)
+            pin = QWEN21_BFS_PINS[request.swap_kind]
+            metadata.update(
+                mandatory_adapter={
+                    "name": "bfs_swap", "filename": profile.filename,
+                    "version": pin["version"], "weight": request.loras[0].weight,
+                    "sha256": pin["sha256"], "size_bytes": pin["size"],
+                },
+                ordered_image_sources=["Source 1: target body/scene", "Source 2: replacement reference"],
+                swap_trigger=profile.trigger,
+            )
+        if MODEL_SPECS[request.model_key].loader == "qwen21_official_extract":
+            from photo_edit_studio.models.qwen21_official_extract import (
+                QWEN21_OFFICIAL_EXTRACT_LORA,
+            )
+
+            pin = QWEN21_OFFICIAL_EXTRACT_LORA
+            metadata.update(
+                experimental_stack=True,
+                checkpoint_source="official Turbo (not original base)",
+                mandatory_adapter={
+                    "name": "official_extract", "filename": pin["filename"], "weight": 1.0,
+                    "version_id": pin["version_id"], "file_id": pin["file_id"],
+                    "sha256": pin["sha256"], "size_bytes": pin["size"],
+                },
+            )
+    if request.workflow in KREA_CHARACTER_SHEET_PROFILES:
+        metadata.update(
+            character_sheet_source=KREA_CHARACTER_SHEET_SOURCE,
+            character_sheet_revision=KREA_CHARACTER_SHEET_REVISION,
+            native_diffusion_size=list(KREA_CHARACTER_SHEET_SIZE),
+            actual_output_sizes=[list(image.size) for image in result.images],
+            uploaded_source_size=list(request.images[0].size),
+            source_aspect_preserved=True,
+            source_max_side=1024,
+            grounding_px=0,
+            fit_mode="fit",
+            sheet_adapter=KREA_CHARACTER_SHEET_PROFILES[request.workflow],
+            sheet_adapter_weight=next(
+                (float(lora.weight) for lora in request.loras
+                 if lora.name.casefold() == KREA_CHARACTER_SHEET_PROFILES[request.workflow].casefold()),
+                1.0,
+            ),
+            mandatory_first_lora_weight=request.krea_first_lora_weight,
+            sampler="lcm" if request.workflow == "krea-dynamic-sheet" else "euler",
+            scheduler="simple",
+            negative_conditioning_active=request.guidance != 1,
+            prompt_policy=("manual-structured" if request.prompt.strip() else "auto-publisher-vlm-greedy")
+            if request.workflow == "krea-dynamic-sheet" else "fixed-trigger-plus-customization",
+            experimental=request.workflow == "krea-dynamic-sheet",
+        )
+        if request.workflow == "krea-dynamic-sheet":
+            metadata["caption_template_sha256"] = KREA_DYNAMIC_TEMPLATE_SHA256
+            metadata["vlm_sampling_mode"] = None if request.prompt.strip() else "off"
+            metadata["vlm_max_length"] = None if request.prompt.strip() else 2048
+    if request.workflow == "qwen-character-sheet":
+        from photo_edit_studio.qwen_character_sheet import QWEN_CHARACTER_SHEET_SHA256
+
+        metadata.update(
+            sheet_layout=request.sheet_layout,
+            sheet_prompt_mode=request.sheet_prompt_mode,
+            sheet_megapixels=request.sheet_megapixels,
+            sheet_archive_sha256=QWEN_CHARACTER_SHEET_SHA256,
+            native_diffusion_size=[request.width, request.height],
+            actual_output_sizes=[list(image.size) for image in result.images],
+            uploaded_source_size=list(request.images[0].size),
+            source_max_side=1536,
+            source_aspect_preserved=True,
+            source_preprocessing="aspect-preserved local upload replaces KJ total_pixels",
+            weight_precision="full BF16",
+            sampler="res_multistep",
+            scheduler="beta",
+            denoise=1.0,
+            attention="comfy kitchen attention",
+            cache_device="auto",
+            cache_dtype="default",
+            degridding="auto",
+            vlm_sampling_mode="off" if request.sheet_prompt_mode == "Auto" else None,
+            vlm_thinking=request.sheet_prompt_mode == "Auto",
+            vlm_max_length=(2560 if request.sheet_layout == "Production" else 2048)
+            if request.sheet_prompt_mode == "Auto" else None,
+            negative_conditioning_active=False,
+        )
     if request.workflow == "krea-all2real":
         metadata["source_budget"] = [request.width, request.height]
         metadata["uploaded_source_size"] = list(request.images[0].size)

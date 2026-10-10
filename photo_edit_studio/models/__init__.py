@@ -10,6 +10,8 @@ from photo_edit_studio.models.diffusers_adapters import (
     Krea2Adapter,
     QwenAdapter,
     QwenAioAdapter,
+    Qwen21OfficialAdapter,
+    Qwen21OfficialExtractAdapter,
 )
 from photo_edit_studio.models.memory import release_cuda
 from photo_edit_studio.models.registry import MODEL_SPECS
@@ -44,6 +46,10 @@ class ModelManager:
             adapter_type = ComfyFireRedAdapter
         elif spec.loader == "qwen21_comfy":
             adapter_type = ComfyQwen21Adapter
+        elif spec.loader == "qwen21_official":
+            adapter_type = Qwen21OfficialAdapter
+        elif spec.loader == "qwen21_official_extract":
+            adapter_type = Qwen21OfficialExtractAdapter
         elif spec.loader == "krea2":
             adapter_type = Krea2Adapter
         elif spec.loader == "qwen":

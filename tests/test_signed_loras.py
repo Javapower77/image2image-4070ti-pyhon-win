@@ -17,7 +17,7 @@ from photo_edit_studio.models.comfy_swap import (
     configure_krea_reference_graph,
     configure_qwen21_graph,
 )
-from photo_edit_studio.models.diffusers_adapters import QwenAdapter
+from photo_edit_studio.models.diffusers_adapters import DiffusersAdapter, QwenAdapter
 from photo_edit_studio.models.registry import MODEL_SPECS
 from photo_edit_studio.swap import swap_lora, swap_profile
 from photo_edit_studio.types import GenerationRequest, LoraSpec
@@ -161,10 +161,22 @@ def test_direct_krea_zero_does_not_disable_base_or_add_node(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("model_key", ["qwen-2511", "flux-klein-4b"])
-def test_diffusers_receives_signed_weights_in_slot_order_and_reloads(tmp_path, model_key):
+def test_diffusers_receives_signed_weights_in_slot_order_and_reloads(
+    tmp_path, model_key, monkeypatch,
+):
     # Exercise the common Diffusers method without loading weights or running inference.
-    adapter = QwenAdapter(MODEL_SPECS[model_key])
+    adapter_class = QwenAdapter if model_key == "qwen-2511" else DiffusersAdapter
+    adapter = adapter_class(MODEL_SPECS[model_key])
     adapter.pipe = Mock()
+    if model_key == "qwen-2511":
+        from photo_edit_studio.models import qwen2511_lora
+
+        # This high-level test checks ordering; real parsing/algebra is tested separately.
+        monkeypatch.setattr(qwen2511_lora, "parse_qwen_lora", lambda _path:
+                            qwen2511_lora.QwenLoraWeights({"synthetic_pair": object()}, {}))
+        adapter.pipe.transformer.named_parameters.return_value = []
+        adapter.pipe.transformer.named_modules.return_value = []
+        monkeypatch.setattr(adapter, "configure_memory", lambda: None)
     req = request(model_key)
     req.loras = selection(tmp_path, model_key, WEIGHTS)
     adapter.apply_loras(req)
@@ -179,5 +191,5 @@ def test_diffusers_receives_signed_weights_in_slot_order_and_reloads(tmp_path, m
     assert adapter.pipe.set_adapters.call_count == 1
     req.loras = selection(tmp_path, model_key, [2])
     adapter.apply_loras(req)
-    adapter.pipe.unload_lora_weights.assert_called_once()
+    assert adapter.pipe.unload_lora_weights.call_count == (2 if model_key == "qwen-2511" else 1)
     adapter.pipe.set_adapters.assert_called_with(["slot0_1"], adapter_weights=[2])

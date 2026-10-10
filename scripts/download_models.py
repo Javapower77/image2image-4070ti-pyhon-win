@@ -8,9 +8,11 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import tempfile
 import warnings
+import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.request import urlretrieve
@@ -42,7 +44,19 @@ from photo_edit_studio.comfy_assets import (
 )
 from photo_edit_studio.config import settings
 from photo_edit_studio.models import MODEL_SPECS
+from photo_edit_studio.models.qwen21_official_extract import (
+    QWEN21_OFFICIAL_EXTRACT_KEY,
+    QWEN21_OFFICIAL_EXTRACT_LORA,
+    qwen21_official_extract_path,
+    validate_qwen21_official_extract_lora,
+)
 from photo_edit_studio.models.qwen_aio import is_safetensors_file
+from photo_edit_studio.qwen_character_sheet import (
+    QWEN_CHARACTER_SHEET_KEY,
+    QWEN_CHARACTER_SHEET_PROFILES,
+    QWEN_CHARACTER_SHEET_SHA256,
+    qwen_character_sheet_archive_path,
+)
 from photo_edit_studio.swap import BFS_REPO, SWAP_PROFILES
 
 GFPGAN_URL = "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth"
@@ -53,6 +67,69 @@ RECOMMENDED_MODELS = ["qwen-2511", "qwen-2511-aio", "flux-klein-4b"]
 QWEN21_R128_KEY = "qwen-2.1-turbo-r128"
 QWEN21_R128_FILENAME = "Qwen-Image-2.1-turbo-v0.2.1-6step-lora-r128.safetensors"
 QWEN21_R128_URL = "https://civitai.red/api/download/models/3384956?fileId=3273779"
+QWEN21_BFS_ASSETS = (
+    {
+        "version_id": 3356102,
+        "file_id": 3248321,
+        "filename": "bfs_head_v1.1_qwen_2.1.safetensors",
+        "legacy_filename": "Qwen21-BFS_Head_v1.1.safetensors",
+        "url": "https://civitai.com/api/download/models/3356102?fileId=3248321",
+        "size": 260096144,
+        "sha256": "d1d748d5601077f3b6d05766f6823510e901970d916afa404a97e85dc92fa88e",
+    },
+    {
+        "version_id": 3363725,
+        "file_id": 3251548,
+        "filename": "bfs_body_swap_v1.0_qwen_2.1.safetensors",
+        "legacy_filename": "Qwen21-BFS_Body_v1.1.safetensors",
+        "url": "https://civitai.com/api/download/models/3363725?fileId=3251548",
+        "size": 209753576,
+        "sha256": "7dc0a53aba4dbc70c204f498936a619d226559da11011f748c389189af46b664",
+    },
+)
+QWEN_CHARACTER_SHEET_ASSETS = (
+    {
+        "repo": "Comfy-Org/Qwen-Image-2.1",
+        "revision": "cb504a4090723e43f17ad01cec0359490e2de613",
+        "remote": "diffusion_models/qwen_image_2.1_bf16.safetensors",
+        "destination": "diffusion_models/qwen_image_2.1_bf16.safetensors",
+        "size": 14230280616,
+        "sha256": "89f4158d066cc33906a199fca85634f766892dd78f49b6698dabf187ac86c4bc",
+    },
+    {
+        "repo": "Comfy-Org/Qwen-Image-2.1",
+        "revision": "cb504a4090723e43f17ad01cec0359490e2de613",
+        "remote": "text_encoders/qwen3vl_8b_bf16.safetensors",
+        "destination": "text_encoders/qwen3vl_8b_bf16.safetensors",
+        "size": 17534334616,
+        "sha256": "68bdc82bc1b66851162ae656225e7e2068166b603db19bd5d5a3b90eb12669a9",
+    },
+    {
+        "repo": "Comfy-Org/Qwen-Image-2.1",
+        "revision": "cb504a4090723e43f17ad01cec0359490e2de613",
+        "remote": "vae/qwen_image_2.1_vae_bf16.safetensors",
+        "destination": "vae/qwen_image_2.1_vae_bf16.safetensors",
+        "size": 675509688,
+        "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+    },
+    {
+        "repo": "Winnougan/Qwen-3.5-INT8-Convrot-Comfy",
+        "revision": "e019237a5e495acfa039a1829822ab75dc642e71",
+        "remote": "qwen3.5_4b_int8_convrot.safetensors",
+        "destination": "text_encoders/qwen3.5_4b_int8_convrot.safetensors",
+        "size": 5588607110,
+        "sha256": "088495aba6219cb8933339e0e433fc326b86787789025c62af4d855864b24455",
+    },
+)
+QWEN_CHARACTER_SHEET_ARCHIVE = {
+    "version_id": 3377047,
+    "file_id": 3265393,
+    "filename": "QwenImage21Character_qwenImage21V30.zip",
+    "url": "https://civitai.com/api/download/models/3377047?fileId=3265393",
+    "size": 33591,
+    "sha256": QWEN_CHARACTER_SHEET_SHA256,
+}
+_SHEET_MEMBER_LIMIT = 8 * 1024 * 1024
 # These are pinned bytes, not evidence that the historical transformer was identical.
 # Destinations are relative to the embedded ComfyUI models directory.
 KREA_ORIGINAL_ASSETS = (
@@ -81,11 +158,53 @@ KREA_ORIGINAL_ASSETS = (
         "size": 20099337,
     },
 )
+KREA_CHARACTER_SHEET_REPO = "Alissonerdx/CharacterSheet"
+KREA_CHARACTER_SHEET_REVISION = "3dc4295163dacc924d213168d67bf16850fd954f"
+KREA_CHARACTER_SHEET_ASSETS = (
+    {
+        "repo": KREA_CHARACTER_SHEET_REPO,
+        "revision": KREA_CHARACTER_SHEET_REVISION,
+        "remote": "QuadView_krea2_v1.safetensors",
+        "destination": "krea2/QuadView_krea2_v1.safetensors",
+        "sha256": "9435005af21cadaed16f79ef1eca9b76b8497789644eeb7f2475b826bb480fbc",
+        "size": 914160176,
+    },
+    {
+        "repo": KREA_CHARACTER_SHEET_REPO,
+        "revision": KREA_CHARACTER_SHEET_REVISION,
+        "remote": "DynamicCharacterSheet_krea2_v1.safetensors",
+        "destination": "krea2/DynamicCharacterSheet_krea2_v1.safetensors",
+        "sha256": "bff2dd8003b5d4e50ef6f2f2793a02a3d1657aeb9176bfec7941be85cb646990",
+        "size": 914160184,
+    },
+    {
+        "repo": KREA_CHARACTER_SHEET_REPO,
+        "revision": KREA_CHARACTER_SHEET_REVISION,
+        "remote": "workflows/QuadView_krea2_v1.json",
+        "destination": "workflows/charactersheet/QuadView_krea2_v1.json",
+        "sha256": "5f6bdeac5b81aa6f0d331fbaa45b5aca31660de9d943bd9d63dc13c108ba304b",
+        "size": 30378,
+    },
+    {
+        "repo": KREA_CHARACTER_SHEET_REPO,
+        "revision": KREA_CHARACTER_SHEET_REVISION,
+        "remote": "workflows/DynamicCharacterSheet_krea2_v1.json",
+        "destination": "workflows/charactersheet/DynamicCharacterSheet_krea2_v1.json",
+        "sha256": "d144cda8af10c5c6e3fe8472d541f619a751f597cba298d581e23dbe5901b706",
+        "size": 57217,
+    },
+)
 _TOKENS: dict[str, str | None] = {}
 AUTH_HELP = {
     "HF": "Set HF_TOKEN or sign in with the Hugging Face CLI for gated assets.",
     "Civitai": "Set CIVITAI_API_TOKEN (or CIVITAI_TOKEN) for authenticated downloads.",
 }
+
+# Civitai's verified download redirect host. Permit file delivery, but never
+# forward API credentials there; _civitai_stream strips them across origins.
+CIVITAI_DELIVERY_HOST = (
+    "civitai-delivery-worker-prod.5ac0637cfd0766c97916cefa3764fbdf.r2.cloudflarestorage.com"
+)
 
 
 def _token(provider: str) -> str | None:
@@ -137,7 +256,9 @@ def _hf_download(function, **kwargs):
 
 
 @contextmanager
-def _civitai_stream(client, url: str, token: str | None, *, query_fallback=False):
+def _civitai_stream(
+    client, url: str, token: str | None, *, query_fallback=False, allowed_hosts=None,
+):
     current = httpx.URL(url)
     origin = current.copy_with(path="/", query=None)
     credentials_allowed = True
@@ -145,6 +266,12 @@ def _civitai_stream(client, url: str, token: str | None, *, query_fallback=False
     for _ in range(10):
         if current.scheme != "https" or current.userinfo:
             raise RuntimeError("Unsafe Civitai download redirect rejected.")
+        if allowed_hosts is not None and (
+            current.port not in (None, 443)
+            or not any(current.host == host or current.host.endswith("." + host)
+                       for host in allowed_hosts)
+        ):
+            raise RuntimeError("Unapproved Civitai download host rejected.")
         headers = {"Authorization": f"Bearer {token}"} if token and credentials_allowed else {}
         with client.stream("GET", current, headers=headers) as response:
             if (response.status_code in (401, 403) and token and query_fallback
@@ -256,10 +383,27 @@ def _pinned_asset_error(path: Path, asset: dict) -> str | None:
         return "SHA256 mismatch"
     if path.suffix == ".safetensors" and not _valid_safetensors(path):
         return "invalid Safetensors header"
+    if path.suffix == ".json":
+        # Parse only after byte verification; never execute or rewrite upstream graphs.
+        try:
+            workflow = json.loads(path.read_bytes())
+        except (ValueError, UnicodeError):
+            return "invalid workflow JSON"
+        nodes = workflow.get("nodes") if isinstance(workflow, dict) else None
+        if not isinstance(nodes, list) or not nodes or any(
+            not isinstance(node, dict)
+            or type(node.get("id")) is not int
+            or not isinstance(node.get("type"), str)
+            or not node["type"].strip()
+            for node in nodes
+        ):
+            return "invalid workflow nodes"
     return None
 
 
-def _download_pinned_krea_asset(asset: dict, target: Path) -> None:
+def _download_pinned_krea_asset(
+    asset: dict, target: Path, *, label: str = "Krea originals"
+) -> None:
     destination = target / asset["destination"]
     # Never silently replace a stale file. Move/remove it explicitly and rerun
     # to download a replacement into same-filesystem staging before installation.
@@ -300,7 +444,7 @@ def _download_pinned_krea_asset(asset: dict, target: Path) -> None:
             detail = "atomic installation failed"
             downloaded.replace(destination)
     except Exception:  # noqa: BLE001 - never expose SDK URLs, bodies or credentials
-        message = f"Krea originals asset failed ({destination.name}): {detail}"
+        message = f"{label} asset failed ({destination.name}): {detail}"
         print(message, file=sys.stderr)
         raise RuntimeError(message) from None
 
@@ -362,6 +506,198 @@ def download_comfy_qwen21_r128() -> None:
     _download_civitai_r128(target / "loras" / QWEN21_R128_FILENAME)
 
 
+def _validate_qwen_sheet_archive(path: Path) -> None:
+    """Hash first, then bounded reads of two root JSONs; never extract ZIP members."""
+    pin = QWEN_CHARACTER_SHEET_ARCHIVE
+    if path.stat().st_size != pin["size"]:
+        raise ValueError("Character-sheet archive size mismatch.")
+    with path.open("rb") as source:
+        raw = source.read(pin["size"] + 1)
+    if len(raw) != pin["size"] or hashlib.sha256(raw).hexdigest() != pin["sha256"]:
+        raise ValueError("Character-sheet archive SHA256 mismatch.")
+    # Use the verified bytes, not a second read of a potentially changed file.
+    from io import BytesIO
+
+    with zipfile.ZipFile(BytesIO(raw)) as archive:
+        members = archive.infolist()
+        if len(members) > 128:
+            raise ValueError("Too many character-sheet ZIP members.")
+        for member in members:
+            # ZipInfo.filename normalizes backslashes on Windows and truncates
+            # NULs. Validate the original central-directory name instead.
+            name = member.orig_filename
+            if (name.startswith("/") or "\\" in name or ":" in name
+                    or "\x00" in name
+                    or any(part in {".", ".."} for part in name.split("/"))
+                    or (member.external_attr >> 16) & 0o170000 == 0o120000):
+                raise ValueError("Unsafe character-sheet ZIP path.")
+        for filename, subgraph_id, static_id in QWEN_CHARACTER_SHEET_PROFILES.values():
+            entries = [member for member in members if member.filename == filename]
+            if len(entries) != 1:
+                raise ValueError("Missing or duplicate character-sheet root JSON.")
+            member = entries[0]
+            if (member.is_dir() or member.flag_bits & 1
+                    or member.file_size > _SHEET_MEMBER_LIMIT
+                    or member.file_size / max(member.compress_size, 1) > 200):
+                raise ValueError("Unsafe character-sheet ZIP member.")
+            with archive.open(member) as source:
+                content = source.read(_SHEET_MEMBER_LIMIT + 1)
+            if len(content) > _SHEET_MEMBER_LIMIT:
+                raise ValueError("Character-sheet JSON exceeds limit.")
+            document = json.loads(content)
+            groups = [group for group in document["definitions"]["subgraphs"]
+                      if group.get("id") == subgraph_id]
+            if len(groups) != 1:
+                raise ValueError("Missing or ambiguous character-sheet subgraph.")
+            for node_id in (478, static_id):
+                nodes = [node for node in groups[0]["nodes"] if node.get("id") == node_id]
+                if len(nodes) != 1:
+                    raise ValueError("Missing or ambiguous character-sheet prompt node.")
+                node = nodes[0]
+                named = node.get("widgets_values_named", {})
+                value = (named["value"] if "value" in named
+                         else node.get("widgets_values", [None])[0])
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("Invalid character-sheet prompt value.")
+
+
+def _download_pinned_civitai(destination: Path, pin: dict, validate, *, label: str) -> None:
+    """Bounded canonical delivery, independent pins, same-filesystem staging."""
+    temporary = None
+    try:
+        if destination.exists():
+            validate(destination)
+            print(f"Already present (size/SHA256 verified): {destination}")
+            return
+        token = _token("Civitai")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading Civitai version {pin['version_id']} / file {pin['file_id']} "
+              f"({pin['filename']}) -> {destination}")
+        # Canonical metadata endpoint can return 403. No mutable metadata is needed:
+        # explicit version/fileId URL + independently supplied exact size/SHA256
+        # pin approved bytes. Never fall back to another file/mirror.
+        with _quiet_network(), httpx.Client(follow_redirects=False, timeout=120) as client:
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent, prefix=destination.name + ".", suffix=".part", delete=False,
+            ) as output:
+                temporary = Path(output.name)
+                with _civitai_stream(
+                    client, pin["url"], token, query_fallback=True,
+                    allowed_hosts=("civitai.com", "civitai.red", CIVITAI_DELIVERY_HOST),
+                ) as response:
+                    length = response.headers.get("content-length")
+                    if length is not None and int(length) != pin["size"]:
+                        raise ValueError("Pinned Civitai response size mismatch.")
+                    count = 0
+                    digest = hashlib.sha256()
+                    for chunk in response.iter_bytes(chunk_size=64 * 1024):
+                        count += len(chunk)
+                        if count > pin["size"]:
+                            raise ValueError("Civitai response exceeds pinned size.")
+                        output.write(chunk)
+                        digest.update(chunk)
+                    if count != pin["size"]:
+                        raise ValueError("Pinned Civitai response is truncated.")
+                    if digest.hexdigest() != pin["sha256"]:
+                        raise ValueError("Pinned Civitai response SHA256 mismatch.")
+                output.flush()
+                os.fsync(output.fileno())
+            validate(temporary)
+            if destination.exists():
+                raise RuntimeError("Destination appeared during download; left unchanged.")
+            temporary.replace(destination)
+    except Exception:  # noqa: BLE001 - do not expose server text, URLs or credentials
+        raise RuntimeError(
+            f"{label} failed size/SHA256/ZIP/Safetensors or transport validation. "
+            "Existing archive/file left unchanged; move/remove invalid files and rerun. "
+            + AUTH_HELP["Civitai"]
+        ) from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _download_qwen_sheet_archive(destination: Path) -> None:
+    _download_pinned_civitai(
+        destination, QWEN_CHARACTER_SHEET_ARCHIVE, _validate_qwen_sheet_archive,
+        label="Qwen character-sheet archive",
+    )
+
+
+def _download_qwen21_official_extract(destination: Path) -> None:
+    _download_pinned_civitai(
+        destination, QWEN21_OFFICIAL_EXTRACT_LORA, validate_qwen21_official_extract_lora,
+        label="Official extracted LoRA (Safetensors)",
+    )
+
+
+def _validate_qwen21_bfs(path: Path, pin: dict) -> None:
+    error = _pinned_asset_error(path, pin)
+    # Staging uses .part, so validate the header explicitly regardless of suffix.
+    if error or not _valid_safetensors(path):
+        raise ValueError(error or "invalid Safetensors header")
+
+
+def _copy_legacy_qwen21_bfs(destination: Path, pin: dict) -> bool:
+    """Keep the legacy file; install only reverified bytes via local atomic staging."""
+    legacy = destination.with_name(pin["legacy_filename"])
+    if not legacy.exists():
+        return False
+    try:
+        _validate_qwen21_bfs(legacy, pin)
+    except (OSError, ValueError):
+        print(f"Legacy file verification failed: {legacy.name}; left unchanged. "
+              f"Fetching pinned canonical file: {destination.name}.")
+        return False
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent, prefix=destination.name + ".", suffix=".part", delete=False,
+        ) as output:
+            temporary = Path(output.name)
+        shutil.copyfile(legacy, temporary)
+        with temporary.open("rb+") as output:
+            os.fsync(output.fileno())
+        _validate_qwen21_bfs(temporary, pin)
+        if destination.exists():
+            raise RuntimeError("Destination appeared during migration; left unchanged.")
+        temporary.replace(destination)
+        print(f"Copied legacy file (size/SHA256/header verified): {legacy.name} -> {destination}")
+        return True
+    except Exception:  # noqa: BLE001 - never expose uncontrolled exception text
+        raise RuntimeError(
+            f"Qwen 2.1 BFS local migration failed ({destination.name}); "
+            "legacy and existing canonical files left unchanged."
+        ) from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def download_qwen21_bfs() -> None:
+    """Only the two publisher-pinned Qwen 2.1 BFS weights; no base models."""
+    for pin in QWEN21_BFS_ASSETS:
+        destination = settings.lora_dir / "qwen21" / pin["filename"]
+        if not destination.exists() and _copy_legacy_qwen21_bfs(destination, pin):
+            continue
+        _download_pinned_civitai(
+            destination, pin, lambda path, pin=pin: _validate_qwen21_bfs(path, pin),
+            label="Qwen 2.1 BFS LoRA (Safetensors)",
+        )
+
+
+def download_comfy_qwen_character_sheet() -> None:
+    """Opt-in full BF16 base/encoder/VAE, INT8 PE and unmodified pinned workflow ZIP."""
+    if not (settings.comfy_dir / "main.py").is_file():
+        raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
+    total = sum(asset["size"] for asset in QWEN_CHARACTER_SHEET_ASSETS)
+    print(f"Qwen character sheet: four pinned weights ({total / 1024**3:.2f} GiB) and workflow ZIP.")
+    print("Review upstream model/workflow licenses before use or redistribution. No Turbo/FP8 substitutions.")
+    for asset in QWEN_CHARACTER_SHEET_ASSETS:
+        _download_pinned_krea_asset(asset, settings.comfy_dir / "models", label="Qwen character sheet")
+    _download_qwen_sheet_archive(qwen_character_sheet_archive_path())
+
+
 def download_comfy_firered() -> None:
     if not (settings.comfy_dir / "main.py").is_file():
         raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
@@ -374,7 +710,7 @@ def download_comfy_firered() -> None:
             _download_named_file(FIRERED_REPO, destination.name, destination)
 
 
-def download_comfy_krea() -> None:
+def download_comfy_krea(*, include_identity: bool = True) -> None:
     if not (settings.comfy_dir / "main.py").is_file():
         raise FileNotFoundError("Install embedded ComfyUI first: scripts/setup-comfy.ps1")
     target = settings.comfy_dir / "models"
@@ -386,7 +722,7 @@ def download_comfy_krea() -> None:
         print(f"Downloading {COMFY_KREA_REPO}/{filename} -> {target}")
         _hf_download(hf_hub_download, repo_id=COMFY_KREA_REPO, filename=filename, local_dir=target)
     adapter = target / "loras" / KREA_EDIT_FILE
-    if not adapter.is_file():
+    if include_identity and not adapter.is_file():
         adapter.parent.mkdir(parents=True, exist_ok=True)
         print(f"Downloading {KREA_EDIT_REPO}/{KREA_EDIT_FILE} -> {adapter}")
         _hf_download(hf_hub_download, repo_id=KREA_EDIT_REPO, filename=KREA_EDIT_FILE, local_dir=adapter.parent)
@@ -395,6 +731,20 @@ def download_comfy_krea() -> None:
         KREA_FIRST_LORA_REMOTE,
         target / "loras" / KREA_FIRST_LORA_FILE,
     )
+
+
+def download_comfy_krea_character_sheets() -> None:
+    """Shared standard FP8 base plus exactly two pinned sheet adapters and workflows."""
+    download_comfy_krea(include_identity=False)
+    print("Krea character sheets: two pinned adapters (~1.70 GiB) and two upstream workflows.")
+    print(
+        "Licenses: review the shared base/encoder/VAE and mandatory adapter upstream terms, "
+        "plus https://civitai.com/models/2764727 and the CharacterSheet repository terms "
+        "before use or redistribution. Downloading is not a redistribution license grant."
+    )
+    for asset in KREA_CHARACTER_SHEET_ASSETS:
+        target = settings.model_dir if asset["remote"].endswith(".json") else settings.lora_dir
+        _download_pinned_krea_asset(asset, target, label="Krea character sheets")
 
 
 
@@ -439,6 +789,10 @@ def main() -> None:
         "--bfs-swap", action="store_true", help="Download only the supported BFS swap LoRAs"
     )
     parser.add_argument(
+        "--qwen21-bfs", action="store_true",
+        help="Download only two pinned Qwen 2.1 BFS LoRAs (or copy verified legacy files)",
+    )
+    parser.add_argument(
         "--comfy-krea", action="store_true", help="Download Krea Turbo ComfyUI checkpoints and identity-edit LoRA"
     )
     parser.add_argument(
@@ -446,10 +800,18 @@ def main() -> None:
         help="Download only three pinned Krea workflow assets (~13.06 GiB), with the approved current INT8 alias substitution",
     )
     parser.add_argument(
+        "--comfy-krea-character-sheets", action="store_true",
+        help="Download shared FP8 Krea weights, mandatory first adapter, two pinned sheet LoRAs and workflows (no identity/Turbo extras)",
+    )
+    parser.add_argument(
         "--comfy-firered", action="store_true", help="Download only FireRed GGUF Q4_K_M, FP8 vision encoder, VAE and Lightning v1.2"
     )
     parser.add_argument(
         "--comfy-qwen21", action="store_true", help="Download only Qwen Image 2.1 INT8 Comfy weights and Viggle Turbo r256 LoRA/node"
+    )
+    parser.add_argument(
+        "--comfy-qwen-character-sheet", action="store_true",
+        help="Download four pinned Qwen sheet weights (BF16 base/encoder/VAE + INT8 4B PE) and pinned workflow ZIP",
     )
     parser.add_argument(
         "--turbo-lora", action="store_true", help="Download the optional official Krea 2 Turbo LoRA into the app's Krea library"
@@ -460,9 +822,12 @@ def main() -> None:
     unknown = [key for key in args.models if key not in MODEL_SPECS]
     if unknown:
         parser.error(f"Unknown model(s): {', '.join(unknown)}")
-    selected = list(MODEL_SPECS) if args.all else (args.models or ([] if args.bfs_swap or args.comfy_krea or args.comfy_krea_originals or args.comfy_firered or args.comfy_qwen21 or args.turbo_lora else RECOMMENDED_MODELS))
+    selected = list(MODEL_SPECS) if args.all else (args.models or ([] if args.bfs_swap or args.qwen21_bfs or args.comfy_krea or args.comfy_krea_originals or args.comfy_krea_character_sheets or args.comfy_firered or args.comfy_qwen21 or args.comfy_qwen_character_sheet or args.turbo_lora else RECOMMENDED_MODELS))
     for key in selected:
         spec = MODEL_SPECS[key]
+        if key == QWEN_CHARACTER_SHEET_KEY:
+            download_comfy_qwen_character_sheet()
+            continue
         if spec.loader == "firered_comfy":
             download_comfy_firered()
             continue
@@ -485,13 +850,28 @@ def main() -> None:
             local_dir=spec.local_path,
             local_dir_use_symlinks=False,
         )
+        if spec.loader in {"qwen21_official", "qwen21_official_extract"}:
+            from photo_edit_studio.models.diffusers_adapters import validate_qwen21_official_config
+
+            # Full official snapshot includes pipeline, processor, scheduler and
+            # component configs; do not exclude/overwrite the saved sigma grid.
+            validate_qwen21_official_config(spec.local_path)
+            if key == QWEN21_OFFICIAL_EXTRACT_KEY:
+                print("Experimental stack: official Turbo checkpoint + extracted LoRA at weight 1; not original base.")
+                _download_qwen21_official_extract(qwen21_official_extract_path())
+    if args.bfs_swap or args.qwen21_bfs:
+        download_qwen21_bfs()
     if args.bfs_swap:
-        for (model_key, _kind), profile in SWAP_PROFILES.items():
-            if model_key in {"qwen-2.1-turbo", QWEN21_R128_KEY}:
-                # This separately released file is installed by the user; it is
-                # not part of the legacy BFS repository used below.
+        seen = set()
+        canonical_qwen21 = {pin["filename"] for pin in QWEN21_BFS_ASSETS}
+        for profile in SWAP_PROFILES.values():
+            if profile.family == "qwen21" or profile.filename in canonical_qwen21:
+                # All Comfy/official profiles share the independently pinned files.
                 continue
             target = settings.lora_dir / profile.family / profile.filename
+            if target in seen:
+                continue
+            seen.add(target)
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_file():
                 print(f"Already present: {target}")
@@ -503,10 +883,14 @@ def main() -> None:
         download_krea_turbo_lora()
     if args.comfy_krea_originals:
         download_comfy_krea_originals()
+    if args.comfy_krea_character_sheets:
+        download_comfy_krea_character_sheets()
     if args.comfy_firered and "firered-1.1" not in selected:
         download_comfy_firered()
     if args.comfy_qwen21 and "qwen-2.1-turbo" not in selected:
         download_comfy_qwen21()
+    if args.comfy_qwen_character_sheet and QWEN_CHARACTER_SHEET_KEY not in selected:
+        download_comfy_qwen_character_sheet()
     if args.turbo_lora and "krea-2-turbo" not in selected and not args.comfy_krea:
         download_krea_turbo_lora()
     if args.restorers:

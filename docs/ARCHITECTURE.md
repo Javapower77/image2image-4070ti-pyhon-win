@@ -26,7 +26,27 @@ The engine enforces both a longest-side limit and a total-pixel limit after calc
 
 FLUX.2 Klein 4B has a model-specific load override. It constructs `Qwen3ForCausalLM` from the local GGUF while using Klein's local text-encoder configuration, injects that module into `Flux2KleinPipeline`, and then applies the normal sequential offload policy. FireRed uses a separate project-managed ComfyUI-GGUF graph with a Q4_K_M transformer, FP8 Qwen2.5-VL encoder, and automatic Lightning v1.2 LoRA; the backend starts in low-VRAM mode.
 
-Qwen Image 2.1 runs through a separate ComfyUI 0.37+ API graph: INT8 model/vision encoder, upstream Viggle `ViggleTurboLora` (unmerged rank 256), and `ViggleTurboSigmas` (six raw nodes shifted for the requested output latent). The adapter reuses the same graph for text, editing, combination and two-image Head/Body BFS swaps. On the 12 GB target, weights and KV cache require ComfyUI `--lowvram` CPU offload; 2K may exhaust VRAM. It does not load Qwen 2511 BFS LoRAs or the full BF16 Qwen 2.1 snapshot.
+The Viggle r256 Qwen Image 2.1 profile runs through a separate ComfyUI 0.37+ API graph: INT8 model/vision encoder, upstream `ViggleTurboLora` (unmerged rank 256), and `ViggleTurboSigmas` (six raw nodes shifted for the requested output latent). The adapter reuses the same graph for text, editing, combination and two-image Head/Body BFS swaps. The separate r128 profile uses its own mandatory adapter and manual sigmas/`res_2s_ode`. On the 12 GB target, weights and KV cache require ComfyUI `--lowvram` CPU offload; 2K may exhaust VRAM. These profiles do not load Qwen 2511 BFS LoRAs or the full BF16 Qwen 2.1 snapshot.
+
+Unstacked `qwen-2.1-turbo-official` instead uses local BF16 Diffusers,
+the publisher's eight saved sigmas and causal KV cache. Experimental Head/Body
+uses exactly two ordered body/source-then-reference images, CFG/True CFG 1 and
+one mandatory canonical BFS adapter at finite weight 0.1–1.5, with no optional
+LoRAs, six-step Turbo, extracted adapter or DLSS. The official-extract profile
+still rejects swaps. Both official profiles validate requests before shared
+DLSS normalization/sizing; essential pipeline call arguments are not filtered.
+
+On cold official BFS loads, byte size/SHA256 are checked before checkpoint
+allocation. CPU A/B normalization and **real target-shape validation occur after
+allocation**, before installation/offload; malformed shapes can still incur
+full-checkpoint RAM costs. Fused image-MLP gate/proj rows split gate-first with
+intrinsic scale 1 and request weight separately applied once. The two pinned
+canonical BFS files are shared with ComfyUI; verified migration copies legacy
+aliases and retains originals (same bytes, Body published v1.0). See
+[SWAP](SWAP.md) for pins, saved metadata and experimental limits. No live official
+BFS inference, quality, performance or VRAM fit is confirmed. Qwen 2.1 native
+×2 uses the shared 2048-side/4,194,304-pixel budget, including supported swaps;
+other multiplier/global limits remain unchanged.
 
 The BFS swap section uses the same local generation engine, dimensions cap, metadata and progress. Qwen/Flux reuse the local adapters with a required compatible BFS LoRA and an ordered body/scene then face/head reference pair. Krea swap routes to a **local ComfyUI** API workflow with the upstream `comfyui-krea2edit` nodes; Diffusers `Krea2Pipeline` remains text-only. The bridge is opt-in and errors if the API workflow or ComfyUI is unavailable. Details in `docs/SWAP.md`.
 
@@ -34,4 +54,10 @@ Krea creation, reference editing, and swaps use the same loopback-only ComfyUI b
 
 ## Privacy
 
-Runtime loading uses local snapshots. Prompts and inputs stay in process memory and are excluded from output metadata. Gradio binds to loopback, disables analytics, and does not create a share URL by default.
+Runtime loading uses local snapshots. User prompt text and source images are
+excluded from output metadata, but official BFS stores the fixed training
+`swap_trigger` and ordered-source labels. PNG/JSON also record saved sigmas,
+KV cache, actual output sizes and BFS filename/version/hash/size/weight;
+snapshot revision, explicit precision and actual scheduler timesteps are not
+recorded. Gradio binds to loopback, disables analytics, and does not create a
+share URL by default.

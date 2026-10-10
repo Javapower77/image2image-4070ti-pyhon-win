@@ -12,6 +12,7 @@ from photo_edit_studio.ui import (
     CSS,
     EDIT_MODE,
     KREA_EDIT_MODE,
+    SHEET_MODE,
     SWAP_MODE,
     TEXT_MODE,
     _close_popovers,
@@ -41,7 +42,7 @@ def test_workflow_icons_and_layout_wired_into_generation() -> None:
         component["props"].get("value"): component
         for component in components if component["type"] == "button"
     }
-    workflows = (EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE)
+    workflows = (EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE, SHEET_MODE)
     assert all(buttons[key]["props"]["icon"]["path"].endswith(".svg") for key in workflows)
     assert "grid-template-areas" in CSS
     assert "'top options'" in CSS
@@ -77,7 +78,7 @@ def test_workflow_icons_and_layout_wired_into_generation() -> None:
     assert all(next(c for c in components if c["type"] == "group" and c["props"].get("elem_id") == f"studio-panel-{name}")["props"]["visible"] is False
                for name in ("settings", "variants", "size", "model", "swap", "bfs"))
     assert component_by_id[next(c["id"] for c in components if c["props"].get("label") == "Outputs (maximum 1)")]["props"]["interactive"] is False
-    for name in ("Generate edit", "Generate swap", "Generate Krea edit"):
+    for name in ("Generate edit", "Generate swap", "Generate Krea edit", "Generate character sheet"):
         target = buttons[name]["id"]
         assert buttons[name]["props"]["icon"]["path"].endswith("generate.svg")
         events = [event for event in app.config["dependencies"] if (target, "click") in event["targets"]]
@@ -100,7 +101,7 @@ def test_reference_svg_assets_are_valid() -> None:
     from photo_edit_studio.config import ROOT
 
     assets = ROOT / "photo_edit_studio" / "assets" / "ui"
-    for name in ("edit", "combine", "text", "krea", "swap", "settings", "variants", "size", "weight", "flux", "firered", "generate", "qwen"):
+    for name in ("edit", "combine", "text", "krea", "swap", "notebook", "settings", "variants", "size", "weight", "flux", "firered", "generate", "qwen"):
         path = assets / f"{name}.svg"
         assert path.is_file()
         svg = ElementTree.parse(path).getroot()
@@ -121,16 +122,16 @@ def test_popovers_open_one_at_a_time_and_toggle_closed() -> None:
     assert len(_popover_updates(None)) == 6
 
 
-@pytest.mark.parametrize("mode", [EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE])
+@pytest.mark.parametrize("mode", [EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE, SHEET_MODE])
 def test_toolbar_reacts_to_each_workflow(mode: str) -> None:
     updates = _toolbar_mode_updates(mode)
-    assert len(updates) == 12
+    assert len(updates) == 14
     assert updates[0]["value"]
     assert updates[1]["elem_classes"] == (["toolbar-icon"] if mode == SWAP_MODE else ["toolbar-icon", "mode-hidden"])
-    assert updates[3]["visible"] is (mode not in {COMBINE_MODE, TEXT_MODE})
+    assert updates[3]["visible"] is (mode not in {COMBINE_MODE, TEXT_MODE, SHEET_MODE})
     assert updates[4]["visible"] is (mode in {COMBINE_MODE, TEXT_MODE})
     assert all(button["variant"] == ("primary" if key == mode else "secondary")
-               for key, button in zip((EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE), _workflow_buttons(mode), strict=True))
+               for key, button in zip((EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE, SHEET_MODE), _workflow_buttons(mode), strict=True))
 
 
 def test_model_icon_and_label_follow_active_selection() -> None:
@@ -188,10 +189,10 @@ def test_model_picker_visibility_follows_workflow() -> None:
     assert all("mode-hidden" in update["elem_classes"] for update in krea)
 
 
-@pytest.mark.parametrize("mode", [EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE])
+@pytest.mark.parametrize("mode", [EDIT_MODE, COMBINE_MODE, TEXT_MODE, KREA_EDIT_MODE, SWAP_MODE, SHEET_MODE])
 def test_native_model_dropdowns_stay_hidden_for_every_workflow(mode: str) -> None:
     changes = _mode_changed(mode)
-    assert len(changes) == 15
+    assert len(changes) == 17
     assert changes[10]["elem_classes"] == ["mode-hidden"]
     assert changes[11]["elem_classes"] == ["mode-hidden"]
 
@@ -225,16 +226,16 @@ def test_model_refresh_does_not_reset_combine_to_edit() -> None:
 
 @pytest.mark.parametrize(
     ("mode", "submit_position"),
-    [(EDIT_MODE, 5), (COMBINE_MODE, 5), (TEXT_MODE, 5), (SWAP_MODE, 9), (KREA_EDIT_MODE, 12)],
+    [(EDIT_MODE, 5), (COMBINE_MODE, 5), (TEXT_MODE, 5), (SWAP_MODE, 9), (KREA_EDIT_MODE, 12), (SHEET_MODE, 16)],
 )
 def test_every_workflow_has_a_visible_submit_button(mode: str, submit_position: int) -> None:
     changes = _mode_changed(mode)
-    assert len(changes) == 15
+    assert len(changes) == 17
     if submit_position == 5:
         assert "mode-hidden" not in changes[5]["elem_classes"]
     else:
         assert "mode-hidden" not in changes[submit_position]["elem_classes"]
-    if mode in {SWAP_MODE, KREA_EDIT_MODE}:
+    if mode in {SWAP_MODE, KREA_EDIT_MODE, SHEET_MODE}:
         assert "mode-hidden" in changes[5]["elem_classes"]
     else:
         assert "mode-hidden" in changes[9]["elem_classes"]

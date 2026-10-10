@@ -33,8 +33,12 @@ class ModelAdapter(ABC):
         self.pipe = None
         self._lora_signature = ()
 
+    @staticmethod
+    def lora_signature(request: GenerationRequest) -> tuple[tuple[str, float], ...]:
+        return tuple((str(item.path), item.weight) for item in request.loras)
+
     def apply_loras(self, request: GenerationRequest) -> None:
-        signature = tuple((str(item.path), item.weight) for item in request.loras)
+        signature = self.lora_signature(request)
         if signature == self._lora_signature:
             return
         unload = getattr(self.pipe, "unload_lora_weights", None)

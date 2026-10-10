@@ -103,6 +103,36 @@ def test_public_hf_explicitly_disables_implicit_token():
     assert downloader._hf_download(lambda **kwargs: kwargs["token"]) is False
 
 
+@pytest.mark.parametrize("token", [None, "private-secret"])
+def test_qwen_archive_delivery_redirect_strips_api_credentials(token):
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if request.url.host == "civitai.com":
+            if token:
+                assert request.headers["authorization"] == f"Bearer {token}"
+            return httpx.Response(307, headers={"location": (
+                f"https://{downloader.CIVITAI_DELIVERY_HOST}/file?signature=delivery"
+            )})
+        assert request.url.host == downloader.CIVITAI_DELIVERY_HOST
+        assert "authorization" not in request.headers
+        assert "token" not in request.url.params
+        assert request.url.params["signature"] == "delivery"
+        return httpx.Response(200, content=b"archive")
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        downloader._civitai_stream(
+            client, downloader.QWEN_CHARACTER_SHEET_ARCHIVE["url"], token,
+            query_fallback=True,
+            allowed_hosts=("civitai.com", "civitai.red", downloader.CIVITAI_DELIVERY_HOST),
+        ) as response,
+    ):
+        assert response.read() == b"archive"
+    assert len(requests) == 2
+
+
 @pytest.fixture
 def weights():
     return save({"test": np.zeros(1, dtype=np.float32)})

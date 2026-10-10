@@ -121,7 +121,7 @@ def diffusion_output_size(
     requested = size if canvas or pre_sized else scaled_output_size(size, multiplier)
     if canvas:
         max_side, max_pixels = settings.combine_max_output_side, settings.combine_max_output_pixels
-    elif family == "qwen21" and workflow in {"standard", "swap"} and multiplier == 2:
+    elif family in {"qwen21", "qwen21-official"} and workflow in {"standard", "swap"} and multiplier == 2:
         max_side, max_pixels = settings.qwen21_x2_max_output_side, settings.qwen21_x2_max_output_pixels
     else:
         max_side, max_pixels = settings.max_output_side, settings.max_output_pixels

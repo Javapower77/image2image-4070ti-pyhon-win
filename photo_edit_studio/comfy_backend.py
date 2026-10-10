@@ -59,11 +59,43 @@ def stop_backend() -> None:
 
 
 def ensure_backend(
-    *, enabled: bool | None = None, model_key: str = "krea-2-turbo", workflow: str = "standard"
+    *, enabled: bool | None = None, model_key: str = "krea-2-turbo", workflow: str = "standard",
+    sheet_prompt_mode: str = "Static",
 ) -> bool:
     """Start only our own local ComfyUI; never claim an unrelated server is embedded."""
     global _process, _log_handle
     all2real = model_key == "krea-2-turbo" and workflow == "krea-all2real"
+    sheet = model_key == "krea-2-turbo" and workflow in {"krea-quadview", "krea-dynamic-sheet"}
+    qwen_sheet = model_key == "qwen-2.1-sheet"
+    if qwen_sheet:
+        from photo_edit_studio.qwen_character_sheet import (
+            QWEN_CHARACTER_SHEET_ASSET_HINT,
+            load_qwen_character_sheet_prompts,
+            missing_qwen_character_sheet_assets,
+        )
+
+        if workflow != "qwen-character-sheet":
+            raise ValueError("qwen-2.1-sheet is only available for qwen-character-sheet.")
+        missing = missing_qwen_character_sheet_assets(settings.comfy_dir, sheet_prompt_mode)
+        if missing:
+            raise FileNotFoundError("Qwen sheet assets missing: " + ", ".join(missing) + ". " + QWEN_CHARACTER_SHEET_ASSET_HINT)
+        load_qwen_character_sheet_prompts("Production")
+        load_qwen_character_sheet_prompts("Simple")
+    if sheet:
+        from photo_edit_studio.krea_character_sheet import (
+            KREA_CHARACTER_SHEET_ASSET_HINT,
+            load_dynamic_caption_template,
+            missing_krea_character_sheet_assets,
+        )
+
+        missing = missing_krea_character_sheet_assets(settings.comfy_dir, workflow)
+        if missing:
+            raise FileNotFoundError(
+                "Krea character-sheet assets missing: " + ", ".join(missing) +
+                ". " + KREA_CHARACTER_SHEET_ASSET_HINT
+            )
+        if workflow == "krea-dynamic-sheet":
+            load_dynamic_caption_template()
     if all2real:
         missing = missing_krea_all2real_assets(settings.comfy_dir)
         if missing:
@@ -89,7 +121,13 @@ def ensure_backend(
         raise FileNotFoundError(
             f"Embedded ComfyUI not installed at {main}. Run scripts/setup-comfy.ps1."
         )
-    if all2real:
+    if qwen_sheet:
+        missing = []  # Checked even when autostart is disabled or backend reused.
+        hint = "qwen-character-sheet (manual full BF16 assets only)"
+    elif sheet:
+        missing = []  # Own assets checked even with autostart disabled/reused.
+        hint = "krea-character-sheets"
+    elif all2real:
         missing = []  # Exact originals checked even when reusing a running backend.
         hint = "All2Real (manual original assets only)"
     elif model_key == "krea-2-turbo" and workflow == "krea-remix":
